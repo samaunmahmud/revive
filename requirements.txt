@@ -1,0 +1,5 @@
+opencv-python-headless==5.0.0.93
+numpy==2.5.3
+boto3==1.43.113
+# evaluation only
+scikit-image==0.25.2

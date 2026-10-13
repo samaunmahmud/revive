@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+eval/results/
+*_revived.jpg
+*_compare.jpg
+*_trace.json
+.env
