@@ -1,0 +1,44 @@
+[
+  {
+    "id": "astronaut-aged",
+    "title": "Faded portrait",
+    "description": "Tinted, faded, grainy and scratched. Restoring the tones reveals hidden grain, which a later step removes.",
+    "source": "astronaut",
+    "profile": "aged"
+  },
+  {
+    "id": "rocket-sepia",
+    "title": "Sepia launch",
+    "description": "A sepia print. Lifting the faded blacks makes faint scratches visible, so the agent adds a repair it didn't plan at the start.",
+    "source": "rocket",
+    "profile": "sepia"
+  },
+  {
+    "id": "camera-grainy",
+    "title": "Grainy street photo",
+    "description": "Heavy film grain on a black-and-white print. Denoising uncovers scratches hidden under the grain.",
+    "source": "camera_bw",
+    "profile": "grainy"
+  },
+  {
+    "id": "coffee-grainy",
+    "title": "Warm caf\u00e9 table",
+    "description": "Grainy, with warm highlights but intact blacks. Is that ageing or real coffee colour? The agent asks you.",
+    "source": "coffee",
+    "profile": "grainy"
+  },
+  {
+    "id": "chelsea-heavy",
+    "title": "Badly damaged cat",
+    "description": "Dense scratches and dust over a large area. The agent won't invent that much of the photo without your approval.",
+    "source": "chelsea",
+    "profile": "heavy"
+  },
+  {
+    "id": "chelsea-clean",
+    "title": "Undamaged control",
+    "description": "Nothing wrong with this one. A good restorer leaves it alone, and so does ReVive.",
+    "source": "chelsea",
+    "profile": "none"
+  }
+]

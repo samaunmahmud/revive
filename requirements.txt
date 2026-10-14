@@ -1,5 +1,9 @@
 opencv-python-headless==5.0.0.93
 numpy==2.5.3
 boto3==1.43.113
+# web app
+fastapi==0.143.0
+uvicorn==0.54.0
+python-multipart==0.0.32
 # evaluation only
 scikit-image==0.26.0
