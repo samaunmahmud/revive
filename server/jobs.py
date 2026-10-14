@@ -20,6 +20,8 @@ import numpy as np
 
 from revive import agent
 
+from . import storage
+
 DATA_DIR = os.environ.get("REVIVE_DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "jobs"))
 MAX_SIDE = 1600           # downscale big uploads: NL-means denoising on 12 MP takes tens of seconds
 MAX_JOBS_KEPT = 200       # oldest job folders are deleted beyond this
@@ -133,7 +135,8 @@ class Job:
                 with open(self._path("trace.json"), "w") as fh:
                     json.dump(trace, fh, indent=2)
                 self.trace = trace
-                self._push("done", {"trace": trace, "restored": self.url("restored.jpg"),
+                archived = storage.archive(self.id, self.dir)
+                self._push("done", {"trace": trace, "restored": self.url("restored.jpg"), "archive": archived,
                                     "restored_png": self.url("restored.png"), "original": self.url("original.jpg")})
             except Exception as e:
                 traceback.print_exc()

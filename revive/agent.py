@@ -170,7 +170,8 @@ class BedrockPlanner:
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
                 inferenceConfig={"maxTokens": 300, "temperature": 0},
             )
-            text = resp["output"]["message"]["content"][0]["text"]
+            # newer models may put a reasoning block first; use the first text block
+            text = next(c["text"] for c in resp["output"]["message"]["content"] if "text" in c)
             action = json.loads(text[text.find("{"): text.rfind("}") + 1])
             tool = action.get("tool")
             if tool not in TOOLS and tool not in ("done", "ask_human"):

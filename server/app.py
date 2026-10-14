@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from revive.tools import TOOLS
+from . import storage
 from .jobs import MAX_SIDE, JobStore, prepare
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,7 +59,7 @@ def health():
 
 @app.get("/api/config")
 def config():
-    return {"bedrock": bedrock_status(), "max_side": MAX_SIDE}
+    return {"bedrock": bedrock_status(), "max_side": MAX_SIDE, "storage": storage.describe()}
 
 
 @app.get("/api/samples")

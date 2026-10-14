@@ -139,6 +139,7 @@ export default function App() {
                     <span className="outcome-meta">
                       {trace.steps.filter((s) => s.kept).length} repairs kept · {trace.steps.filter((s) => !s.kept).length} rejected · {trace.total_ms} ms · planner {trace.planner}
                     </span>
+                    {view.done.archive && <span className="outcome-meta">archived to {view.done.archive}</span>}
                     {Object.keys(answers).length > 0 && (
                       <span className="outcome-meta">your answers: {Object.entries(answers).map(([k, v]) => `${toolLabel(k).toLowerCase()} ${v ? '✓' : '✗'}`).join(' · ')}</span>
                     )}
