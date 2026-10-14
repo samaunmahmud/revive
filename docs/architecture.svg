@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" font-family="Inter, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title>ReVive architecture: OpenCV 5 agent on AWS Graviton</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+    <style>
+      .t { font-size: 15px; font-weight: 700; fill: #1d1915; }
+      .s { font-size: 12.5px; fill: #52514e; }
+      .xs { font-size: 11.5px; fill: #6d6a64; }
+      .k { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; fill: #a5651d; }
+      .line { stroke: #52514e; stroke-width: 1.6; fill: none; }
+      .dash { stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+  <rect width="1200" height="700" fill="#fcfbf8"/>
+
+  <text x="40" y="44" font-size="24" font-weight="700" fill="#1d1915" font-family="Georgia, 'Iowan Old Style', serif" font-style="italic">ReVive · architecture</text>
+  <text x="40" y="68" class="s">One container on AWS Graviton (ARM64). OpenCV 5 does all perception, repair and verification; the LLM only plans from numbers.</text>
+
+  <!-- browser -->
+  <rect x="40" y="120" width="190" height="120" rx="10" fill="#fff" stroke="#d9d4ca"/>
+  <text x="58" y="148" class="t">Browser</text>
+  <text x="58" y="172" class="s">React + Vite UI</text>
+  <text x="58" y="192" class="xs">upload · live trace (SSE)</text>
+  <text x="58" y="210" class="xs">approve / decline · slider</text>
+  <text x="58" y="228" class="xs">phone or desktop</text>
+
+  <!-- AWS cloud boundary -->
+  <rect x="280" y="96" width="890" height="570" rx="16" fill="#f7f3ec" stroke="#e0c9a6" stroke-width="1.5"/>
+  <text x="300" y="122" class="k">AWS · ONE CLOUDFORMATION STACK</text>
+
+  <!-- CloudFront -->
+  <rect x="300" y="140" width="170" height="90" rx="10" fill="#fff" stroke="#d9d4ca"/>
+  <text x="318" y="168" class="t">CloudFront</text>
+  <text x="318" y="190" class="s">public HTTPS URL</text>
+  <text x="318" y="208" class="xs">API + SSE uncached</text>
+  <text x="318" y="224" class="xs">hashed assets cached</text>
+
+  <path class="line" d="M230 180 H296" marker-end="url(#arrow)"/>
+  <text x="240" y="172" class="xs">HTTPS</text>
+
+  <!-- EC2 Graviton -->
+  <rect x="510" y="140" width="640" height="370" rx="12" fill="#fff" stroke="#2a78d6" stroke-width="1.6"/>
+  <text x="530" y="166" class="k" fill="#2a78d6" style="fill:#2a78d6">EC2 GRAVITON (ARM64) · t4g.small · c8g.large for COOL (planned)</text>
+  <text x="530" y="186" class="xs">IMDSv2 only · no SSH (SSM Session Manager) · reachable from CloudFront IPs only · Elastic IP</text>
+
+  <path class="line" d="M470 185 H506" marker-end="url(#arrow)"/>
+
+  <!-- container -->
+  <rect x="530" y="200" width="600" height="292" rx="10" fill="#fbfaf7" stroke="#d9d4ca" stroke-dasharray="4 3"/>
+  <text x="546" y="222" class="xs">Docker container (ARM64 image from Amazon ECR)</text>
+
+  <rect x="546" y="234" width="170" height="70" rx="8" fill="#fff" stroke="#d9d4ca"/>
+  <text x="560" y="258" class="t">FastAPI</text>
+  <text x="560" y="278" class="xs">jobs on threads</text>
+  <text x="560" y="294" class="xs">SSE event stream</text>
+
+  <!-- agent box -->
+  <rect x="736" y="234" width="380" height="244" rx="8" fill="#fff8ec" stroke="#e2a04f" stroke-width="1.4"/>
+  <text x="752" y="258" class="t">ReVive agent</text>
+  <text x="852" y="258" class="xs">revive/agent.py</text>
+
+  <rect x="752" y="270" width="168" height="54" rx="6" fill="#fff" stroke="#e2c79a"/>
+  <text x="764" y="292" font-size="13" font-weight="700" fill="#1d1915">Perceive</text>
+  <text x="764" y="311" class="xs">6 OpenCV 5 measures</text>
+
+  <rect x="932" y="270" width="168" height="54" rx="6" fill="#fff" stroke="#e2c79a"/>
+  <text x="944" y="292" font-size="13" font-weight="700" fill="#1d1915">Plan</text>
+  <text x="944" y="311" class="xs">heuristic or LLM</text>
+
+  <rect x="752" y="336" width="168" height="54" rx="6" fill="#fff" stroke="#e2c79a"/>
+  <text x="764" y="358" font-size="13" font-weight="700" fill="#1d1915">Act</text>
+  <text x="764" y="377" class="xs">5 OpenCV 5 repair tools</text>
+
+  <rect x="932" y="336" width="168" height="54" rx="6" fill="#fff" stroke="#e2c79a"/>
+  <text x="944" y="358" font-size="13" font-weight="700" fill="#1d1915">Verify</text>
+  <text x="944" y="377" class="xs">re-measure, keep or retry</text>
+
+  <rect x="752" y="402" width="348" height="62" rx="6" fill="#fff" stroke="#e2c79a"/>
+  <text x="764" y="424" font-size="13" font-weight="700" fill="#1d1915">OpenCV 5 build</text>
+  <text x="764" y="443" class="xs">stock: opencv-python-headless 5.0.0.93 (pinned)</text>
+  <text x="764" y="458" class="xs">COOL: Cloud-Optimized OpenCV 5.0, Graviton4 AMI (planned)</text>
+
+  <path class="line" d="M716 269 H732" marker-end="url(#arrow)"/>
+
+  <!-- Bedrock -->
+  <rect x="830" y="550" width="320" height="96" rx="10" fill="#fff" stroke="#d9d4ca"/>
+  <text x="848" y="578" class="t">Amazon Bedrock</text>
+  <text x="848" y="600" class="s">Claude via the Converse API</text>
+  <text x="848" y="618" class="xs">sees OpenCV numbers only, never pixels</text>
+  <text x="848" y="634" class="xs">any failure → heuristic fallback, logged</text>
+  <path class="line dash" d="M1100 297 H1140 V546" marker-end="url(#arrow)"/>
+  <text x="1132" y="532" class="xs" text-anchor="end">plan request (JSON measurements)</text>
+
+  <!-- S3 -->
+  <rect x="510" y="550" width="290" height="96" rx="10" fill="#fff" stroke="#d9d4ca"/>
+  <text x="528" y="578" class="t">Amazon S3</text>
+  <text x="528" y="600" class="s">originals · restored photos · traces</text>
+  <text x="528" y="618" class="xs">private, encrypted, 30-day expiry</text>
+  <text x="528" y="634" class="xs">s3://…/jobs/&lt;id&gt;/</text>
+  <path class="line" d="M631 304 V546" marker-end="url(#arrow)"/>
+  <text x="640" y="532" class="xs">archive finished jobs</text>
+
+  <!-- ECR + IAM notes -->
+  <rect x="300" y="270" width="170" height="104" rx="10" fill="#fff" stroke="#d9d4ca"/>
+  <text x="318" y="296" class="t">Amazon ECR</text>
+  <text x="318" y="316" class="xs">ARM64 image, scanned</text>
+  <text x="318" y="334" class="xs">deploy.sh pushes,</text>
+  <text x="318" y="350" class="xs">SSM rolls out</text>
+  <path class="line dash" d="M470 320 H506" marker-end="url(#arrow)"/>
+
+  <rect x="300" y="400" width="170" height="104" rx="10" fill="#fff" stroke="#d9d4ca"/>
+  <text x="318" y="426" class="t">IAM role</text>
+  <text x="318" y="446" class="xs">S3: this bucket only</text>
+  <text x="318" y="462" class="xs">Bedrock: invoke</text>
+  <text x="318" y="478" class="xs">ECR: pull · SSM core</text>
+</svg>
