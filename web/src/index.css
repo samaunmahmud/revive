@@ -193,6 +193,13 @@ button { font: inherit; color: inherit; }
 .btn.ghost { background: none; }
 .btn:disabled { opacity: 0.5; cursor: wait; }
 
+/* plain-language summary */
+.summary { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px 12px; }
+.summary .section-title { margin-bottom: 8px; }
+.summary ul { margin: 0; padding: 0 0 0 18px; display: grid; gap: 5px; }
+.summary li { font: 15.5px/1.45 var(--serif); color: var(--ink); }
+.summary li::marker { color: var(--amber); }
+
 /* questions */
 .question {
   display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 22px; align-items: center;

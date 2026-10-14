@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { answerJob, getConfig, getSamples, startJob } from './api'
 import { useJobStream } from './useJobStream'
 import { fmtScore, toolLabel } from './labels'
+import { summarise } from './summary'
 import Intake from './components/Intake'
 import CompareSlider from './components/CompareSlider'
 import MaskedPhoto from './components/MaskedPhoto'
@@ -149,6 +150,11 @@ export default function App() {
                     <a className="btn" href={`/api/jobs/${jobId}/files/trace.json?download=true`}>Download trace</a>
                     <button type="button" className="btn ghost" onClick={reset}>New photo</button>
                   </div>
+                </section>
+
+                <section className="summary">
+                  <h2 className="section-title">What ReVive did</h2>
+                  <ul>{summarise(trace).map((line) => <li key={line}>{line}</li>)}</ul>
                 </section>
 
                 {trace.questions.map((q) => (
