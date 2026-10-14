@@ -4,34 +4,39 @@
     "title": "Faded portrait",
     "description": "Tinted, faded, grainy and scratched. Once the tones are restored, OpenCV finds far more of the real scratches, so the repair covers them.",
     "source": "astronaut",
-    "profile": "aged"
+    "profile": "aged",
+    "real": false
   },
   {
-    "id": "rocket-faded",
-    "title": "Sun-faded launch",
-    "description": "A sun-faded print. The agent restores the tones and touches nothing else, because nothing else measures as damaged.",
-    "source": "rocket",
-    "profile": "faded"
+    "id": "real-lemmens-1925",
+    "title": "Real 1925 portrait",
+    "description": "A real faded, tinted print. The blacks have lifted too, so the agent treats the tint as ageing: colour first, then tones.",
+    "real": true,
+    "credit": "Public domain, 1925, Wikimedia Commons",
+    "credit_url": "https://commons.wikimedia.org/wiki/File:Lemmens_in_1925.jpg"
   },
   {
-    "id": "coffee-grainy",
-    "title": "Warm caf\u00e9 table",
-    "description": "Grainy, with warm highlights but intact blacks. Is that ageing or real coffee colour? The agent asks you.",
-    "source": "coffee",
-    "profile": "grainy"
+    "id": "real-nara-1972",
+    "title": "Real 1972 colour slide",
+    "description": "A real dye-faded slide with a magenta cast, but its blacks are intact. Is that ageing or the real light? The agent asks you.",
+    "real": true,
+    "credit": "Public domain, June 1972, Wikimedia Commons",
+    "credit_url": "https://commons.wikimedia.org/wiki/File:CHEMICAL_PLANTS_ON_SHORE_ARE_CONSIDERED_PRIME_SOURCE_OF_POLLUTION_-_NARA_-_546220.jpg"
   },
   {
     "id": "chelsea-heavy",
     "title": "Badly damaged cat",
     "description": "Dense scratches and dust over a large area. The agent won't invent that much of the photo without your approval.",
     "source": "chelsea",
-    "profile": "heavy"
+    "profile": "heavy",
+    "real": false
   },
   {
     "id": "chelsea-clean",
     "title": "Undamaged control",
     "description": "Nothing wrong with this one. A good restorer leaves it alone, and so does ReVive.",
     "source": "chelsea",
-    "profile": "none"
+    "profile": "none",
+    "real": false
   }
 ]

@@ -27,7 +27,7 @@ export const METRICS = {
     hint: 'darkest tones, 0–1; fading lifts blacks to grey',
   },
   highlight_cast: {
-    label: 'Colour cast', fmt: (v) => v.toFixed(1), bad: (v) => v > 8,
+    label: 'Colour cast', fmt: (v) => v.toFixed(1), bad: (v) => v > 12,  // correction keeps ~8-9 of natural warmth on purpose
     hint: 'tint of the brightest 10% of pixels',
   },
   contrast: {

@@ -41,10 +41,16 @@ export default function Intake({ samples, onFile, onSample, busy }) {
           {samples.map((s) => (
             <li key={s.id}>
               <button type="button" className="sample" onClick={() => onSample(s.id)} disabled={busy}>
-                <span className="print"><img src={s.url} alt={s.title} loading="lazy" /></span>
+                <span className="print">
+                  <img src={s.url} alt={s.title} loading="lazy" />
+                  <span className={`sample-tag ${s.real ? 'real' : ''}`}>{s.real ? 'real scan' : 'synthetic damage'}</span>
+                </span>
                 <span className="sample-title">{s.title}</span>
                 <span className="sample-desc">{s.description}</span>
               </button>
+              {s.credit_url && (
+                <a className="sample-credit" href={s.credit_url} target="_blank" rel="noreferrer">{s.credit}</a>
+              )}
             </li>
           ))}
         </ul>
