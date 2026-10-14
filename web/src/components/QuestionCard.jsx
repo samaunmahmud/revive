@@ -6,7 +6,7 @@ const COPY = {
     yes: 'Approve repair mask',
     no: 'Leave the damage',
     explain: (q, ev) =>
-      `Red marks what OpenCV detected as scratches and dust (${((ev?.mask_coverage ?? q.measurements.scratch_coverage) * 100).toFixed(1)}% of the photo). Filling that much means inventing pixels, so the agent wants a person to check the mask first.`,
+      `Red marks every pixel OpenCV would repair (${((ev?.mask_coverage ?? q.measurements.scratch_coverage) * 100).toFixed(1)}% of the photo). Filling that much means inventing pixels, so the agent wants a person to check the mask first.`,
   },
   correct_colour: {
     yes: 'It’s ageing, remove it',

@@ -16,7 +16,7 @@ export const toolLabel = (t) => TOOLS[t]?.label ?? t
 export const METRICS = {
   scratch_coverage: {
     label: 'Scratches & dust', fmt: (v) => `${(v * 100).toFixed(2)}%`, bad: (v) => v > 0.0045,
-    hint: 'share of the photo marked as thin marks or dust',
+    hint: 'share of the photo confidently marked as scratches or dust (marks that stand out from the texture around them)',
   },
   noise_sigma: {
     label: 'Grain', fmt: (v) => v.toFixed(1), bad: (v) => v > 6,

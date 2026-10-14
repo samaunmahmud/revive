@@ -146,7 +146,7 @@ class HeuristicPlanner:
         if r["scratch_coverage"] > SCRATCH_MIN and "inpaint_scratches" not in blocked:
             if r["scratch_coverage"] > SCRATCH_REVIEW:
                 return {"tool": "ask_human", "about": "inpaint_scratches",
-                        "question": f"{r['scratch_coverage']*100:.1f}% of the photo is marked as damage. "
+                        "question": f"{r['scratch_coverage']*100:.1f}% of the photo is confidently marked as damage. "
                                     "Approve the repair mask before I fill it in?",
                         "reason": "large damaged area"}
             f, note = _gentle(history, "inpaint_scratches")
