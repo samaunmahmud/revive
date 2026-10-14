@@ -11,6 +11,7 @@ function StepEntry({ s }) {
       <div className="entry-head">
         <span className="entry-num">{s.step}</span>
         <span className="entry-tool">{toolLabel(s.tool)}</span>
+        {s.image && <img className="entry-thumb" src={s.image} alt="" />}
         <span className={`verdict ${s.kept ? 'kept' : 'rejected'}`}>{s.kept ? 'kept' : 'rejected'}</span>
       </div>
       <p className="entry-reason">

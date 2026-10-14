@@ -1,4 +1,4 @@
-import { METRICS, fmtMetric } from '../labels'
+import { METRICS, fmtMetric, fmtScore } from '../labels'
 
 /** The OpenCV measurements at the start, and (once finished) at the end. */
 export default function Diagnosis({ initial, final, initialScore, finalScore }) {
@@ -8,8 +8,8 @@ export default function Diagnosis({ initial, final, initialScore, finalScore }) 
       <header>
         <h2 className="section-title">Diagnosis · OpenCV 5</h2>
         <span className="score">
-          damage score <b>{initialScore}</b>
-          {finalScore !== undefined && <> → <b className={finalScore <= 1 ? 'good' : 'warn'}>{finalScore}</b></>}
+          damage score <b>{fmtScore(initialScore)}</b>
+          {finalScore !== undefined && <> → <b className={finalScore <= 1 ? 'good' : 'warn'}>{fmtScore(finalScore)}</b></>}
         </span>
       </header>
       <dl>

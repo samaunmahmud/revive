@@ -42,3 +42,6 @@ export const METRICS = {
 
 export const metricLabel = (m) => METRICS[m]?.label ?? m
 export const fmtMetric = (m, v) => (METRICS[m] ? METRICS[m].fmt(v) : String(v))
+
+// Damage score for display: one decimal is enough to read the change at a glance
+export const fmtScore = (v) => (v === undefined || v === null ? '' : Number(v).toFixed(1))

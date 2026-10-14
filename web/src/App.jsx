@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { answerJob, getConfig, getSamples, startJob } from './api'
 import { useJobStream } from './useJobStream'
-import { toolLabel } from './labels'
+import { fmtScore, toolLabel } from './labels'
 import Intake from './components/Intake'
 import CompareSlider from './components/CompareSlider'
 import MaskedPhoto from './components/MaskedPhoto'
 import Diagnosis from './components/Diagnosis'
 import TraceLog from './components/TraceLog'
 import QuestionCard from './components/QuestionCard'
+import AgentLoop from './components/AgentLoop'
 
 export default function App() {
   const [config, setConfig] = useState(null)
@@ -34,7 +35,8 @@ export default function App() {
     const failed = events.find((e) => e.kind === 'error')?.data
     const latestWithImage = [...events].reverse().find((e) => e.data.image)
     const questionEvents = events.filter((e) => e.kind === 'question').map((e) => e.data)
-    return { start, done, failed, latestWithImage, questionEvents, running: Boolean(jobId) && !done && !failed }
+    const latest = [...events].reverse().find((e) => ['start', 'step', 'question', 'human'].includes(e.kind))
+    return { start, done, failed, latest, latestWithImage, questionEvents, running: Boolean(jobId) && !done && !failed }
   }, [events, jobId])
 
   const run = async (fn) => {
@@ -95,6 +97,7 @@ export default function App() {
       ) : (
         <main className="workbench">
           <div className="stage">
+            <AgentLoop event={view.latest} done={Boolean(view.done)} eventKey={events.length} />
             <div className="lighttable">
               <div className="viewer-bar">
                 <span className="viewer-caption">
@@ -126,7 +129,12 @@ export default function App() {
             {trace && (
               <>
                 <section className={`outcome ${trace.status}`}>
-                  <div>
+                  <div className="outcome-score" title="Damage score (lower is better)">
+                    <span>{fmtScore(trace.initial_score)}</span>
+                    <span className="arrow">→</span>
+                    <b>{fmtScore(trace.final_score)}</b>
+                  </div>
+                  <div className="outcome-text">
                     <span className="status-pill">{trace.status === 'complete' ? 'Restored' : 'Needs your review'}</span>
                     <span className="outcome-meta">
                       {trace.steps.filter((s) => s.kept).length} repairs kept · {trace.steps.filter((s) => !s.kept).length} rejected · {trace.total_ms} ms · planner {trace.planner}
