@@ -2,16 +2,16 @@
   {
     "id": "astronaut-aged",
     "title": "Faded portrait",
-    "description": "Tinted, faded, grainy and scratched. Restoring the tones reveals hidden grain, which a later step removes.",
+    "description": "Tinted, faded, grainy and scratched. Once the tones are restored, OpenCV finds far more of the real scratches, so the repair covers them.",
     "source": "astronaut",
     "profile": "aged"
   },
   {
-    "id": "rocket-sepia",
-    "title": "Sepia launch",
-    "description": "A sepia print. Lifting the faded blacks makes faint scratches visible, so the agent adds a repair it didn't plan at the start.",
+    "id": "rocket-faded",
+    "title": "Sun-faded launch",
+    "description": "A sun-faded print. The agent restores the tones and touches nothing else, because nothing else measures as damaged.",
     "source": "rocket",
-    "profile": "sepia"
+    "profile": "faded"
   },
   {
     "id": "coffee-grainy",

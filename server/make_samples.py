@@ -20,9 +20,9 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "samples")
 # (id, source image, damage profile, title, what it shows)
 SAMPLES = [
     ("astronaut-aged", "astronaut", "aged", "Faded portrait",
-     "Tinted, faded, grainy and scratched. Restoring the tones reveals hidden grain, which a later step removes."),
-    ("rocket-sepia", "rocket", "sepia", "Sepia launch",
-     "A sepia print. Lifting the faded blacks makes faint scratches visible, so the agent adds a repair it didn't plan at the start."),
+     "Tinted, faded, grainy and scratched. Once the tones are restored, OpenCV finds far more of the real scratches, so the repair covers them."),
+    ("rocket-faded", "rocket", "faded", "Sun-faded launch",
+     "A sun-faded print. The agent restores the tones and touches nothing else, because nothing else measures as damaged."),
     ("coffee-grainy", "coffee", "grainy", "Warm café table",
      "Grainy, with warm highlights but intact blacks. Is that ageing or real coffee colour? The agent asks you."),
     ("chelsea-heavy", "chelsea", "heavy", "Badly damaged cat",
