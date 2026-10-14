@@ -86,7 +86,7 @@ class FlakyBedrockClient:
             raise TimeoutError("simulated Bedrock timeout")
         if mode == "blocked_tool":
             prompt = kwargs["messages"][0]["content"][0]["text"]
-            blocked = prompt.split("waiting for a human: ")[1].split("\n")[0]
+            blocked = prompt.split("waiting for a human): ")[1].split("\n")[0]
             tool = next((t for t in agent.TOOLS if t in blocked), "denoise")
             text = json.dumps({"tool": tool, "params": {}, "reason": "ignores the blocked list"})
             if tool not in blocked:  # nothing blocked yet: fall back to broken JSON

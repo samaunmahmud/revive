@@ -163,14 +163,79 @@ class HeuristicPlanner:
         return {"tool": "done", "params": {}, "reason": "no remaining measurement above its threshold"}
 
 
+# Allowed parameters per tool: (min, max) for numbers, a tuple of choices for strings.
+# LLM replies are clamped to these, so a bad value can never crash or overdo a tool.
+PARAM_RANGES = {
+    "correct_colour": {"strength": (0.0, 1.0)},
+    "enhance_contrast": {"clip": (0.0, 4.0)},
+    "inpaint_scratches": {"radius": (2, 7), "method": ("telea", "ns")},
+    "denoise": {"strength": (3.0, 15.0)},
+    "sharpen": {"amount": (0.2, 1.5)},
+}
+
+
+def sanitize_params(tool: str, params) -> dict:
+    """Keep only known parameters, clamped to their allowed range; fill gaps with defaults."""
+    out = dict(DEFAULT_PARAMS.get(tool, {}))
+    for key, rule in PARAM_RANGES.get(tool, {}).items():
+        if not isinstance(params, dict) or key not in params:
+            continue
+        value = params[key]
+        if isinstance(rule[0], str):
+            if value in rule:
+                out[key] = value
+        else:
+            try:
+                v = float(value)
+            except (TypeError, ValueError):
+                continue
+            v = min(max(v, rule[0]), rule[1])
+            out[key] = int(round(v)) if isinstance(rule[0], int) else round(v, 2)
+    return out
+
+
+def planner_rules() -> str:
+    """The planner's rules, generated from the same constants the heuristic and verifier use."""
+    return (
+        "You are the planner in ReVive, an agent that restores old photos the way a careful human "
+        "restorer would. Each turn you get OpenCV measurements of the photo and choose ONE next step. "
+        "You never see the pixels.\n\n"
+        "Measurements: scratch_coverage = share of the photo with confident scratch/dust marks; "
+        "repair_area = share inpainting would actually repaint; noise_sigma = grain; black_point = darkest "
+        "tones 0-1 (fading lifts it); highlight_cast = tint of the brightest pixels; contrast; sharpness.\n\n"
+        "Rules (same thresholds as the built-in planner):\n"
+        f"- Order: colour, then tones, then scratches, then grain.\n"
+        f"- correct_colour only if highlight_cast > {CAST_MIN} AND black_point > {FADED_BLACK_POINT} (an ageing "
+        f"tint fades the blacks too). If highlight_cast > {AMBIGUOUS_CAST} but blacks are intact, it may be the "
+        "real scene colour: ask_human about correct_colour.\n"
+        f"- enhance_contrast if black_point > {FADED_BLACK_POINT}; start with clip 0 (pure tone stretch).\n"
+        f"- inpaint_scratches if scratch_coverage > {SCRATCH_MIN}. If repair_area > {SCRATCH_REVIEW}, it would "
+        "invent a large area: ask_human about inpaint_scratches first.\n"
+        f"- denoise if noise_sigma > {NOISE_MIN}; strength about equal to noise_sigma (3-15).\n"
+        "- Never call a tool listed as blocked.\n\n"
+        "After every step a verifier re-measures and REJECTS the step unless: its own target metric improved; "
+        f"structure similarity stays above its floor {json.dumps(STRUCTURE_FLOOR)}; contrast did not create "
+        f"grain (noise growth <= {NOISE_GROWTH_MAX}x); denoise removed no more than {METHOD_NOISE_MAX}x the "
+        "estimated grain. After a rejection, retry about 40% gentler.\n\n"
+        "Reply with ONE JSON object and nothing else, one of:\n"
+        '{"tool": "<tool>", "params": {...}, "reason": "<one sentence citing the numbers>"}\n'
+        '{"tool": "ask_human", "about": "<tool>", "question": "<question for the person>", "reason": "..."}\n'
+        '{"tool": "done", "reason": "..."}\n'
+        f"Tools and parameter ranges: {json.dumps({k: v['params'] for k, v in TOOLS.items()})}"
+    )
+
+
 class BedrockPlanner:
     """LLM planner on Amazon Bedrock (Converse API).
 
     It sees only OpenCV's measurements and the verifier's verdicts, never the
-    pixels, so every decision is grounded in the vision output.
+    pixels, so every decision is grounded in the vision output. Its reply is
+    validated: unknown or blocked tools and unparsable replies fall back to the
+    heuristic for that step, and parameters are clamped to safe ranges.
     """
 
     name = "bedrock"
+    MAX_TOKENS = 2000  # room for models that think before answering
 
     def __init__(self, model_id=None, region=None):
         import boto3
@@ -179,26 +244,19 @@ class BedrockPlanner:
         self.fallback = HeuristicPlanner()
 
     def next_action(self, r: dict, history: list, blocked: set) -> dict:
-        tools_desc = {k: {"params": v["params"], "when": v["desc"]} for k, v in TOOLS.items()}
         prompt = (
-            "You are the planner in a photo-restoration agent. Choose the single next step.\n"
             f"OpenCV measurements now: {json.dumps(perception.public(r))}\n"
             f"Steps so far (kept=false means the verifier rejected it): {json.dumps(history)}\n"
-            f"Tools that are finished, given up on, or waiting for a human: {sorted(blocked)}\n"
-            f"Tools: {json.dumps(tools_desc)}\n"
-            "Rules: colour before tones, tones before scratches, scratches before grain. "
-            "Never call a blocked tool. After a rejection, retry gentler. If a repair could "
-            "change what the photo really shows, ask a human instead of guessing.\n"
-            "Reply with JSON only, one of:\n"
-            '{"tool": "<tool>", "params": {...}, "reason": "..."}\n'
-            '{"tool": "ask_human", "about": "<tool>", "question": "...", "reason": "..."}\n'
-            '{"tool": "done", "reason": "..."}'
+            f"Blocked tools (finished, given up on, or waiting for a human): {sorted(blocked)}\n"
+            "Choose the next step."
         )
         try:
+            # No temperature/top_p: current Claude models reject non-default sampling settings.
             resp = self.client.converse(
                 modelId=self.model_id,
+                system=[{"text": planner_rules()}],
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={"maxTokens": 300, "temperature": 0},
+                inferenceConfig={"maxTokens": self.MAX_TOKENS},
             )
             # newer models may put a reasoning block first; use the first text block
             text = next(c["text"] for c in resp["output"]["message"]["content"] if "text" in c)
@@ -208,6 +266,11 @@ class BedrockPlanner:
                 raise ValueError(f"unknown tool {tool}")
             if tool in blocked:
                 raise ValueError(f"blocked tool {tool}")
+            if tool == "ask_human" and action.get("about") not in TOOLS:
+                raise ValueError(f"question about unknown tool {action.get('about')}")
+            if tool in TOOLS:
+                action["params"] = sanitize_params(tool, action.get("params"))
+            action["reason"] = str(action.get("reason", ""))[:300]
             return action
         except Exception as e:  # a model hiccup must never stop a restoration
             a = self.fallback.next_action(r, history, blocked)

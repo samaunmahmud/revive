@@ -110,3 +110,53 @@ def test_live_events_follow_the_trace(aged, quiet):
                              on_event=lambda kind, payload, image=None, mask=None: events.append(kind))
     assert events[0] == "start"
     assert events.count("step") == len(trace["steps"])
+
+
+class FakeBedrock:
+    """Returns scripted replies and records each request."""
+
+    def __init__(self, replies):
+        self.replies, self.requests = list(replies), []
+
+    def converse(self, **kwargs):
+        self.requests.append(kwargs)
+        text = self.replies.pop(0) if self.replies else '{"tool": "done", "reason": "ok"}'
+        return {"output": {"message": {"content": [{"reasoningContent": {}}, {"text": text}]}},
+                "usage": {"inputTokens": 1, "outputTokens": 1}}
+
+
+def _bedrock(client):
+    p = agent.BedrockPlanner.__new__(agent.BedrockPlanner)
+    p.model_id, p.client, p.fallback = "test", client, agent.HeuristicPlanner()
+    return p
+
+
+def test_llm_params_are_clamped_and_unknown_keys_dropped(aged, quiet):
+    client = FakeBedrock(['Sure! {"tool": "enhance_contrast", "params": {"clip": 40, "foo": 1}, "reason": "blacks faded"}'])
+    _, trace = agent.restore(aged("rocket", "faded"), planner=_bedrock(client), log=quiet)
+    step = trace["steps"][0]
+    assert step["tool"] == "enhance_contrast" and step["params"] == {"clip": 4.0}   # clamped, 'foo' dropped
+    assert not step["kept"]                                  # and the verifier still rejects the over-strong clip
+
+
+def test_llm_question_about_unknown_tool_falls_back(aged, quiet):
+    client = FakeBedrock(['{"tool": "ask_human", "about": "make_pretty", "question": "?"}'])
+    _, trace = agent.restore(aged("rocket", "faded"), planner=_bedrock(client), log=quiet)
+    assert trace["steps"][0]["reason"].startswith("[fallback: ValueError]")
+
+
+def test_llm_request_carries_rules_and_no_sampling_params(aged, quiet):
+    client = FakeBedrock([])
+    agent.restore(aged("rocket", "faded"), planner=_bedrock(client), log=quiet)
+    req = client.requests[0]
+    rules = req["system"][0]["text"]
+    assert str(agent.SCRATCH_REVIEW) in rules and str(agent.NOISE_GROWTH_MAX) in rules and "repair_area" in rules
+    assert "temperature" not in req["inferenceConfig"] and "topP" not in req["inferenceConfig"]
+    assert all("image" not in c for c in req["messages"][0]["content"])
+
+
+def test_sanitize_params_handles_garbage():
+    assert agent.sanitize_params("denoise", {"strength": "lots"}) == {}
+    assert agent.sanitize_params("denoise", {"strength": 99}) == {"strength": 15.0}
+    assert agent.sanitize_params("inpaint_scratches", {"radius": 9.7, "method": "magic"}) == {"radius": 7, "method": "telea"}
+    assert agent.sanitize_params("correct_colour", None) == {"strength": 0.9}

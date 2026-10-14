@@ -50,7 +50,7 @@ def main():
         try:
             resp = runtime.converse(modelId=model_id,
                                     messages=[{"role": "user", "content": [{"text": PROMPT}]}],
-                                    inferenceConfig={"maxTokens": 300})
+                                    inferenceConfig={"maxTokens": 2000})
             text = next((c["text"] for c in resp["output"]["message"]["content"] if "text" in c), "")
             json.loads(text[text.find("{"): text.rfind("}") + 1])
             print(f"  OK    {model_id}  ({(time.perf_counter() - t0) * 1000:.0f} ms)")
