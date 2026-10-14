@@ -5,6 +5,8 @@ what is wrong, **plans** a repair, **acts**, then **re-measures** to check the r
 actually helped. When a fix could change what the photo really shows, it **asks a
 human** instead of guessing.
 
+[![CI](https://github.com/samaunmahmud/revive/actions/workflows/ci.yml/badge.svg)](https://github.com/samaunmahmud/revive/actions/workflows/ci.yml)
+
 Entry for the OpenCV AI Competition 2026 (powered by AWS): Agentic Vision with OpenCV 5.
 
 **Live demo:** _pending AWS deployment_ · **Report:** [docs/REPORT.md](docs/REPORT.md) ·
