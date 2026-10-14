@@ -5,47 +5,71 @@ what is wrong, **plans** a repair, **acts**, then **re-measures** to check the r
 actually helped. When a fix could change what the photo really shows, it **asks a
 human** instead of guessing.
 
-Entry for the OpenCV AI Competition 2026 (powered by AWS) — Agentic Vision path.
+Entry for the OpenCV AI Competition 2026 (powered by AWS): Agentic Vision with OpenCV 5.
 
-## How it works
+**Live demo:** _pending AWS deployment_ · **Report:** [docs/REPORT.md](docs/REPORT.md) ·
+**Annotated traces:** [docs/trace-example.md](docs/trace-example.md)
 
-```
-            ┌─────────────── perceive (OpenCV 5) ───────────────┐
-photo ──▶   │ scratch_coverage · noise_sigma · black_point ·     │
-            │ highlight_cast · contrast · sharpness              │
-            └──────────────────────┬─────────────────────────────┘
-                                   ▼
-                     plan (Bedrock LLM / heuristic)
-                     picks ONE tool + settings, or asks a human
-                                   ▼
-            act (OpenCV 5): correct_colour · enhance_contrast ·
-                            inpaint_scratches · denoise · sharpen
-                                   ▼
-            verify (OpenCV 5): did the target metric improve?
-                               is the structure (SSIM) preserved?
-                 kept ─────────────┤──────────── rejected → retry 40% gentler
-                                   │                       (max 2), then give up
-                                   ▼
-                         loop until done / human review
-```
+![agent workflow](docs/agent-workflow.svg)
 
-**Why it's agentic, not a fixed pipeline** — the OpenCV measurements change what
-happens next:
+## Why it's an agent, not a filter chain
 
-- Restoring faded tones often *reveals* scratches and grain that were invisible
-  before. The agent logs them as revealed and repairs them in later steps.
-- A repair that smears detail (structure below threshold) is rejected and retried
-  with gentler settings or a different algorithm.
-- A colour cast with intact blacks may be the real scene (a cup of coffee is brown),
-  so the agent asks rather than "correcting" it. Large damaged areas (>3% of the
-  photo) need a human to approve the repair mask before inpainting.
-- Every step is recorded in a trace (measurements before/after, decision, verdict).
+OpenCV 5 measurements decide what happens next, and they are taken again after
+every step:
+
+- **Re-measurement changes the repair.** On the "Faded portrait" sample, restoring
+  the faded tones lets OpenCV find **78%** of the true scratches instead of **54%**,
+  so inpainting uses the new mask. The denoise strength also comes from the
+  re-measured grain.
+- **The verifier rejects harmful steps.** A step is kept only if:
+  - its own metric improved,
+  - structure survived (blurred SSIM),
+  - contrast didn't create grain,
+  - denoising didn't remove detail.
+
+  Otherwise it is retried 40% gentler (at most twice), and then the agent gives
+  up on that tool.
+- **It asks instead of guessing.** A colour cast with intact blacks may be the
+  real scene (coffee is brown), so it asks. Damage over 3% of the photo means a
+  person approves the red damage mask before anything is filled in.
+- **Every step is traced:** the measurements before and after, the reason, the
+  parameters, the checks, the verdict and the time. The trace streams live to the
+  UI and is archived in S3.
+
+## Results (35 seeded cases: 5 public-domain images × 7 damage types)
+
+| | SSIM | PSNR (dB) |
+|---|---|---|
+| Damaged input | 0.680 | 25.1 |
+| Naive fixed pipeline (every tool once) | 0.672 | 18.8 |
+| **ReVive (automatic)** | **0.818** | **27.3** |
+| ReVive + simulated human answers | 0.830 | 27.5 |
+
+- **Do no harm:** on undamaged photos ReVive keeps SSIM at **0.994**; the naive
+  pipeline drops them to 0.75.
+- **Verifier vs planner mistakes:** with 29 injected over-strong decisions, mean
+  SSIM is 0.797 with the verifier off and **0.827** with it on (0.830 with no
+  mistakes). It helped in 10 cases and hurt in none.
+- **LLM failure handling:** across 114 simulated Bedrock failures (timeouts,
+  broken JSON, unknown and blocked tools), **35/35** runs completed, with results
+  identical to the heuristic planner's.
+- **Outcomes:** 26/35 runs complete automatically; 9 ask a person (5 mask
+  approvals, 4 colour questions).
+- **Known weak spots:**
+  - heavy damage, where the naive pipeline scores 0.51 vs 0.43 automatic and 0.51
+    with approval;
+  - thin real detail mistaken for scratches;
+  - synthetic damage only so far.
+
+  See [docs/REPORT.md §7](docs/REPORT.md#7-limitations).
+
+![quality by damage type](docs/figures/ssim_by_profile.png)
 
 ## Quick start
 
 ```bash
-pip install -r requirements.txt
-python restore.py old_photo.jpg                       # offline heuristic planner
+pip install -r requirements.txt                       # Python 3.12+; OpenCV 5 pinned
+python restore.py old_photo.jpg                       # CLI, offline heuristic planner
 python restore.py old_photo.jpg --planner bedrock     # LLM planner on Amazon Bedrock
 python restore.py old_photo.jpg --approve inpaint_scratches --decline correct_colour
 ```
@@ -53,38 +77,37 @@ python restore.py old_photo.jpg --approve inpaint_scratches --decline correct_co
 ### Web app
 
 ```bash
-pip install -r requirements.txt
 cd web && npm install && npm run build && cd ..
-uvicorn server.app:app --port 8000             # open http://localhost:8000
+uvicorn server.app:app --port 8000                    # open http://localhost:8000
 ```
 
-For frontend development, run `uvicorn server.app:app --reload` and, in `web/`,
-`npm run dev` (Vite on :5173 proxies `/api` to :8000). The UI streams the agent's
-trace live (Server-Sent Events), shows the damage mask when the agent asks for
-approval, and re-runs the agent with your answers via `restore(img, answers=...)`.
-Bundled demo photos are generated by `python -m server.make_samples`.
+The UI streams the agent's trace live (Server-Sent Events). It shows the damage
+mask when the agent asks for approval, and it re-runs the agent with your answers
+through `restore(img, answers=...)`. Five demo photos ship in `server/samples`
+(regenerate them with `python -m server.make_samples`). For frontend development,
+run `uvicorn server.app:app --reload` alongside `npm run dev` in `web/`; Vite on
+:5173 proxies `/api` to :8000.
 
-Bedrock needs AWS credentials, plus optional `AWS_REGION` and `REVIVE_MODEL_ID`. If
-the model call fails, the agent falls back to the heuristic planner and notes it
-in the trace.
+The Bedrock planner needs AWS credentials, plus optional `AWS_REGION` and
+`REVIVE_MODEL_ID`. If a model call fails, the agent falls back to the heuristic
+planner and says so in the trace.
 
 ## Deploy on AWS (Graviton)
 
-```
-browser ──HTTPS──▶ CloudFront ──HTTP (CloudFront IPs only)──▶ EC2 t4g.small (Graviton, ARM64)
-                                                                │  Docker: FastAPI + React + OpenCV 5 agent
-                                                                ├──▶ Amazon Bedrock (LLM planner, Converse API)
-                                                                └──▶ Amazon S3 (originals, results, traces)
-```
+![architecture](docs/architecture.svg)
 
-Everything is one CloudFormation stack (`deploy/cloudformation.yaml`): VPC, Graviton
-instance (IMDSv2, no SSH; admin via SSM Session Manager), Elastic IP, CloudFront
-(caching off for the API and live stream, on for hashed assets), a private
-encrypted S3 bucket with 30-day expiry, and an instance role scoped to that bucket,
-Bedrock and ECR pull.
+Everything is one CloudFormation stack (`deploy/cloudformation.yaml`):
+- a VPC and a Graviton instance (IMDSv2 only, no SSH; admin through SSM Session
+  Manager);
+- an Elastic IP;
+- CloudFront (caching off for the API and the live stream, on for hashed assets);
+- a private, encrypted S3 bucket with 30-day expiry;
+- an instance role scoped to that bucket, Bedrock and ECR pull.
 
-Prerequisites: AWS CLI v2 with credentials (`aws configure`), Docker running, and
-Bedrock model access for Anthropic models in your region.
+Prerequisites:
+- AWS CLI v2 with credentials (`aws configure`);
+- Docker running;
+- Bedrock model access for Anthropic models in your region.
 
 ```bash
 python deploy/check_bedrock.py --only haiku     # which Claude IDs work on this account
@@ -93,79 +116,64 @@ REVIVE_MODEL_ID=<working id> ./deploy/deploy.sh # build ARM64 image → ECR → 
 ./deploy/teardown.sh                            # delete everything (stack, bucket contents, ECR)
 ```
 
-Defaults: region `eu-west-2` (`AWS_REGION`), instance `t4g.small`
-(`REVIVE_INSTANCE_TYPE`). Rough cost while running: t4g.small ≈ $0.019/h, public
-IPv4 ≈ $0.005/h, CloudFront and S3 within free-tier volumes for a demo, so about
-$0.60 a day. Run `teardown.sh` when you don't need it.
+Defaults are region `eu-west-2` (`AWS_REGION`) and instance `t4g.small`
+(`REVIVE_INSTANCE_TYPE`). While it runs, it costs about $0.60 a day:
+- t4g.small ≈ $0.019/h;
+- public IPv4 ≈ $0.005/h;
+- CloudFront and S3 stay within free-tier volumes for a demo.
 
-The same image runs locally: `docker build --platform linux/arm64 -t revive . && docker run -p 8000:8000 revive`.
+Run `teardown.sh` when you don't need it.
 
-## Evaluation
+The same image runs locally:
+`docker build --platform linux/arm64 -t revive . && docker run -p 8000:8000 revive`.
 
-`python -m eval.evaluate` takes 5 public-domain images, applies 7 seeded damage
-profiles (including an undamaged control), and compares three things against the
-clean original:
+## Reproducing the evaluation
 
-- the damaged input,
-- a naive fixed pipeline (every tool once, default settings),
-- ReVive.
-
-| (35 cases) | SSIM | PSNR (dB) |
-|---|---|---|
-| Damaged input | 0.680 | 25.1 |
-| Fixed pipeline | 0.672 | 18.8 |
-| **ReVive (no human)** | **0.818** | **27.3** |
-| ReVive + simulated human answers | 0.830 | 27.5 |
-
-- 26/35 cases complete automatically (SSIM 0.885); 9 are escalated to a human.
-- On undamaged control photos ReVive leaves the image essentially untouched
-  (SSIM ≥ 0.98), while the fixed pipeline drops them to about 0.74.
-
-Outputs go to `eval/results/`: `results.csv`, `traces.json`, and side-by-side
-images (damaged | ReVive | original).
-
-### Known limitations (found by the evaluation)
-
-- **Warm subjects with a tint.** A naturally warm subject (orange cat fur) under an
-  ageing tint gets slightly over-corrected (chelsea/sepia: 0.885 vs 0.939 untouched).
-- **Scratches over similar tones.** Where a scratch crosses a similar-toned
-  background, it breaks into short fragments that fail the "long and thin" rule, so
-  faint pieces remain. Planned fix: join collinear fragments (Hough line grouping)
-  before the length test.
-- **Thin real detail.** Very thin real features (tripod legs, spoon edges) can be
-  flagged as scratches; inpainting them is mostly invisible but not lossless.
-- **Synthetic damage only.** The evaluation uses synthetic ageing; real scanned
-  prints are still to be added.
+```bash
+python -m eval.evaluate        # quality vs damaged input and naive pipeline → eval/results/
+python -m eval.agentic         # success/escalation, verifier ablation, LLM-failure test
+python -m eval.trace_example   # annotated trace with ground-truth scratch positions
+python -m eval.charts          # figures → docs/figures/
+python -m eval.planners        # Bedrock vs heuristic planner (needs AWS credentials)
+python -m bench.benchmark run --label stock --price <$/h>   # OpenCV latency/throughput/cost
+python -m bench.benchmark compare bench/results/*.json      # stock vs COOL table
+```
 
 ## Project layout
 
 ```
 revive/perception.py   OpenCV 5 measurements (the agent's eyes)
 revive/tools.py        OpenCV 5 repair tools (the agent's hands)
-revive/agent.py        plan → act → verify loop, planners, human questions, trace
+revive/agent.py        plan → act → verify loop, planners, side-effect checks, human questions, trace
 revive/damage.py       seeded synthetic ageing for evaluation
-eval/evaluate.py       benchmark vs damaged input and fixed pipeline
 restore.py             command-line entry point
-server/app.py          FastAPI: jobs, live SSE trace, human answers, serves the web app
-server/jobs.py         runs the agent on a background thread and records its events
-server/storage.py      archives finished jobs to S3 when REVIVE_S3_BUCKET is set
-web/                   React + Vite frontend
+server/                FastAPI: jobs, live SSE trace, human answers, S3 archive, demo samples
+web/                   React + Vite frontend (darkroom UI)
+eval/                  evaluate (quality), agentic (behaviour), planners, trace_example, charts
+bench/                 reproducible OpenCV benchmark (stock vs COOL)
 deploy/                CloudFormation stack, deploy/teardown scripts, Bedrock model check
+docs/                  report, diagrams, annotated traces, figures, video script
 Dockerfile             ARM64 image: builds the UI, runs FastAPI + the agent
 ```
 
-## Roadmap to submission (deadline 26 Oct, 11:59pm PT)
+## Status (deadline 26 Oct, 11:59pm PT)
 
-- [x] OpenCV 5 perception and repair tools, agent loop, verifier, trace
-- [x] Evaluation harness with baselines and failure cases
-- [ ] Web app: upload, live step-by-step trace, approve/decline questions, before/after slider
-- [ ] AWS: API on Graviton (ECS or EC2), S3 for images and traces, Bedrock planner live
-- [ ] COOL benchmark on Graviton vs stock OpenCV (latency per tool) for the COOL award
+- [x] OpenCV 5 perception and repair tools, agent loop, verifier with side-effect checks, trace
+- [x] Evaluation: quality, agentic metrics, verifier ablation, LLM failure handling, charts
+- [x] Web app: upload, live trace, approve/decline with mask evidence, before/after slider
+- [x] ARM64 container and one-stack AWS deployment (CloudFront, Graviton, S3, Bedrock)
+- [x] Report draft, architecture and agent-workflow diagrams, annotated traces, video script
+- [ ] Deploy live and run the Bedrock-vs-heuristic evaluation
+- [ ] COOL vs stock OpenCV benchmark on Graviton4
 - [ ] Real scanned old photos in the evaluation
-- [ ] Technical report, architecture and agent-workflow diagrams, video under 5 minutes
+- [ ] Record the video
 
 ## Responsible use
 
-ReVive repairs damage; it does not invent content. Large-area inpainting and
-ambiguous colour changes need human approval, and every change is logged. Restored
-images should be labelled as restored when used as historical records.
+ReVive repairs damage; it does not invent content. It uses classical OpenCV
+operations only, with no generative fill. Large-area inpainting and ambiguous
+colour changes need human approval, and every change is logged with its evidence.
+The LLM planner receives six numbers, never the image. Restored images should be
+labelled as restored when used as historical records.
+
+Sample images are public-domain photos from scikit-image.
