@@ -18,15 +18,15 @@ to check that the repair helped without doing harm. When a repair could change
 what the photo really shows, it **asks a person** instead of guessing.
 
 On 35 seeded test cases (5 public-domain images × 7 damage types), ReVive raises
-mean SSIM against the clean original from 0.680 (damaged) to **0.818**, where a
+mean SSIM against the clean original from 0.680 (damaged) to **0.822**, where a
 naive "run every filter once" pipeline drops it to 0.672. On undamaged photos
-ReVive leaves the image essentially untouched (**SSIM 0.994**), while the naive
-pipeline drops it to 0.75.
+ReVive applies no steps at all (**SSIM 1.000**), while the naive pipeline drops
+it to 0.75.
 
-When a test planner injects 29 over-strong decisions, the verifier rejects the
-harmful steps and recovers almost all the lost quality: mean SSIM is 0.797 with
-the verifier off, **0.827** with it on, and 0.830 with no mistakes at all. Across
-114 simulated LLM failures, every restoration still completed.
+When a test planner injects 21 over-strong decisions, the verifier rejects the
+harmful steps and recovers almost all the lost quality: mean SSIM is 0.800 with
+the verifier off, **0.832** with it on, and 0.834 with no mistakes at all. Across
+105 simulated LLM failures, every restoration still completed.
 
 ## 2. Problem and users
 
@@ -56,7 +56,7 @@ Its design rules come from how a restorer works:
 
 | measurement | method (OpenCV 5) | what it signals |
 |---|---|---|
-| `scratch_coverage` | `absdiff(gray, medianBlur(gray, 7))`, noise-scaled threshold, `connectedComponentsWithStats` shape rules (long and ≤ 2.5 px wide = scratch; small round = dust), `dilate` | share of the photo covered by thin marks; also yields the repair mask |
+| `scratch_coverage` | `absdiff(gray, medianBlur(gray, 7))`, noise-scaled threshold, `connectedComponentsWithStats` shape rules (long and ≤ 2.5 px wide = scratch; small round = dust), `dilate`. Only **confident** marks count: those standing out ≥ 4.5× from the local texture (`blur`-based local std of the median image) | share of the photo covered by confident marks; the full mask is what gets repaired |
 | `noise_sigma` | Immerkaer's estimator via `filter2D` | film grain |
 | `black_point` | 1st percentile of L in `cvtColor(BGR2LAB)` | fading (lifted blacks) |
 | `highlight_cast` | LAB a/b offset of the brightest 10% | ageing tint |
@@ -185,8 +185,8 @@ the account, end-to-end latency through CloudFront.
 |---|---|---|
 | damaged input | 0.680 | 25.1 |
 | naive fixed pipeline | 0.672 | 18.8 |
-| **ReVive, automatic** | **0.818** | **27.3** |
-| ReVive + human answers | 0.830 | 27.5 |
+| **ReVive, automatic** | **0.822** | **29.4** |
+| ReVive + human answers | 0.834 | 29.5 |
 
 ![quality by damage type](figures/ssim_by_profile.png)
 
@@ -195,7 +195,7 @@ pipeline (0.51) beats automatic ReVive (0.43), and ReVive only ties it with
 human approval (0.51). The agent refuses to inpaint about 10% of the photo on
 its own, which is by design. Even approved, its gentler repairs leave more
 damage than an aggressive filter chain. On **undamaged** photos ReVive applies
-almost nothing (0.994), while the naive pipeline does visible harm (0.75).
+nothing at all (1.000), while the naive pipeline does visible harm (0.75).
 
 ### 6.2 Agentic behaviour (`eval/agentic.py`)
 
@@ -203,9 +203,11 @@ almost nothing (0.994), while the naive pipeline does visible harm (0.75).
 |---|---|
 | runs completed automatically | 26 / 35 (74%) |
 | escalated to a human | 9 / 35 (5 mask approvals, 4 colour questions) |
-| task success (no harm vs input and final damage score ≤ 1) | 77% |
-| runs where re-measurement found more damage after a step | 20 / 35 (see 7, false positives) |
-| steps kept / rejected (normal planner) | 70 / 0 |
+| no harm (SSIM not lower than the damaged input) | 97% |
+| task success (no harm and final damage score ≤ 1) | 83% |
+| runs where re-measurement found more damage after a step | 19 / 35 (see 7) |
+| inpaint steps on photos with no scratches | 0 of 10 |
+| steps kept / rejected (normal planner) | 61 / 0 |
 
 ![outcomes](figures/outcomes.png)
 
@@ -216,17 +218,17 @@ the settings with over-strong ones on half of its first attempts:
 - inpaint radius 9 with Navier-Stokes;
 - full-strength colour correction.
 
-It injected 29 mistakes over the same 35 cases.
+It injected 21 mistakes over the same 35 cases.
 
 | | mean SSIM | photos not harmed |
 |---|---|---|
-| verifier off | 0.797 | 85.7% |
-| **verifier on** | **0.827** | **91.4%** |
-| reference: no mistakes | 0.830 | 91.4% |
+| verifier off | 0.800 | 91.4% |
+| **verifier on** | **0.832** | **97.1%** |
+| reference: no mistakes | 0.834 | 97.1% |
 
 ![verifier ablation](figures/verifier_ablation.png)
 
-- The verifier rejected 13 steps, and every gentler retry succeeded.
+- The verifier rejected 12 steps, and every gentler retry succeeded.
 - It improved 10 cases and made none worse.
 - These checks were added *because* this experiment exposed a gap. The first
   version of the verifier (target improved + structure) accepted every injected
@@ -234,7 +236,7 @@ It injected 29 mistakes over the same 35 cases.
 
 **Failure handling 2: the LLM fails.** The real `BedrockPlanner` was run against
 a fake client that returned broken JSON, prose, unknown tools and blocked tools,
-or timed out (114 failures across 35 runs). All 35 runs completed. Every result
+or timed out (105 failures across 35 runs). All 35 runs completed. Every result
 was pixel-identical to the heuristic planner's, and every fallback is labelled
 in the trace.
 
@@ -255,10 +257,13 @@ re-measurement):
 
 | step | median latency |
 |---|---|
-| colour | 27 ms |
-| tones | 33 ms |
-| inpainting | 27 ms |
-| denoise | 456 ms (p95 1.0 s) |
+| colour | 16 ms |
+| tones | 16 ms |
+| inpainting | 14 ms |
+| denoise | 163 ms (p95 178 ms) |
+
+Measured on an Apple M-series laptop; an earlier run on the same machine under
+load measured 2–3× higher. The Graviton numbers are in 6.4.
 
 Non-local-means denoising dominates the run time.
 
@@ -281,7 +286,33 @@ A note before the numbers: stock OpenCV 5 wheels already include KleidiCV, and
 denoising dominates ReVive's runtime. So any COOL gain depends on how well it
 accelerates `fastNlMeansDenoisingColored`, and we will report whatever we measure.
 
-### 6.5 What we tried that did not work
+### 6.5 Fixing false scratch detections
+
+The first full evaluation showed that thin real detail was being flagged as
+scratches: 9 of 19 kept inpainting steps were on photos with no marks (a launch
+tower lattice, tripod legs, a cup rim). We separated two questions:
+- **whether** to repair, decided from *confident* marks only;
+- **what** to repair, using the full mask, so recall is unchanged.
+
+A mark is confident when it stands out strongly from the texture right around it.
+Per pixel, that is `|image − median| / (local std of the median image + 2)`,
+averaged over the mark and required to be ≥ 4.5.
+
+| | before | after |
+|---|---|---|
+| mean SSIM, automatic / with human | 0.818 / 0.830 | **0.822 / 0.834** |
+| mean PSNR, automatic | 27.3 dB | **29.4 dB** |
+| undamaged control | 0.994 | **1.000** |
+| inpaint steps on photos with no marks | 9 of 19 | **0 of 10** |
+| aged/scratched cases still repaired | 10 / 10 | 10 / 10 |
+
+Our first version measured contrast against a ring around the whole mark. That
+hid long scratches that cross many regions, and the flagship demo photo stopped
+being repaired. Measuring per pixel fixed it. Cutoffs from 4.0 to 5.0 give
+identical results, and 6.0 starts missing real scratches, so 4.5 sits in the
+middle of that plateau.
+
+### 6.6 What we tried that did not work
 
 **Joining scratch fragments with `HoughLinesP`.** The idea was to recover
 scratches that break up over similar tones. It found texture on clean photos
@@ -290,14 +321,13 @@ gained +0.004 on heavy damage, so it was not shipped.
 
 ## 7. Limitations
 
-- **Thin real detail is mistaken for scratches.** Launch-tower lattice, tripod
-  legs and cup rims all trigger it.
-  - 9 of the 19 kept inpainting steps are on photos whose damage profile adds no
-    marks.
-  - 11 of 16 "revealed scratches" events are on such photos.
-  - Each change is small (the control still scores 0.994), but it is a real false
-    positive. "Revealed" in the trace means "measured higher after this step",
-    not "verified hidden damage".
+- **The scratch cutoff is tuned on synthetic marks.** Our seeded scratches are
+  high-contrast. Faint real scratches in busy texture may not count as
+  confident, and then they are not repaired. Real prints are needed to check this.
+- **"Revealed" means "measured higher after this step"**, not "verified hidden
+  damage". 6 of the 8 "revealed scratches" events happen on photos with no marks.
+  Since 6.5 they no longer trigger a repair, but the badge still appears in the
+  trace.
 - **Denoising softens texture** (wood grain, fur) while still passing the
   verifier.
 - **Heavy damage:** the conservative agent restores less than an aggressive

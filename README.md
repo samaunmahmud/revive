@@ -42,15 +42,17 @@ every step:
 |---|---|---|
 | Damaged input | 0.680 | 25.1 |
 | Naive fixed pipeline (every tool once) | 0.672 | 18.8 |
-| **ReVive (automatic)** | **0.818** | **27.3** |
-| ReVive + simulated human answers | 0.830 | 27.5 |
+| **ReVive (automatic)** | **0.822** | **29.4** |
+| ReVive + simulated human answers | 0.834 | 29.5 |
 
-- **Do no harm:** on undamaged photos ReVive keeps SSIM at **0.994**; the naive
-  pipeline drops them to 0.75.
-- **Verifier vs planner mistakes:** with 29 injected over-strong decisions, mean
-  SSIM is 0.797 with the verifier off and **0.827** with it on (0.830 with no
+- **Do no harm:** on undamaged photos ReVive applies **no steps at all** (SSIM
+  1.000); the naive pipeline drops them to 0.75. It also never inpaints a photo
+  that has no scratches (0 of 10 inpaint steps, down from 9 of 19 before the
+  confident-marks check).
+- **Verifier vs planner mistakes:** with 21 injected over-strong decisions, mean
+  SSIM is 0.800 with the verifier off and **0.832** with it on (0.834 with no
   mistakes). It helped in 10 cases and hurt in none.
-- **LLM failure handling:** across 114 simulated Bedrock failures (timeouts,
+- **LLM failure handling:** across 105 simulated Bedrock failures (timeouts,
   broken JSON, unknown and blocked tools), **35/35** runs completed, with results
   identical to the heuristic planner's.
 - **Outcomes:** 26/35 runs complete automatically; 9 ask a person (5 mask
@@ -58,7 +60,8 @@ every step:
 - **Known weak spots:**
   - heavy damage, where the naive pipeline scores 0.51 vs 0.43 automatic and 0.51
     with approval;
-  - thin real detail mistaken for scratches;
+  - the scratch threshold is tuned on synthetic, high-contrast marks, so faint
+    real scratches may be missed;
   - synthetic damage only so far.
 
   See [docs/REPORT.md §7](docs/REPORT.md#7-limitations).

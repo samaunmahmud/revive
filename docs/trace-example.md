@@ -10,14 +10,16 @@ by clicking the **Faded portrait** and **Warm café table** samples.
 
 | step | planner's reason (from OpenCV numbers) | verifier | what the re-measurement changed |
 |---|---|---|---|
-| 0 | perceive: `highlight_cast 13.6`, `black_point 0.239`, `noise_sigma 7.1`, `scratch_coverage 0.89%` | | starting plan: colour, then tones |
+| 0 | perceive: `highlight_cast 13.6`, `black_point 0.239`, `noise_sigma 7.1`, `scratch_coverage 0.52%` (confident marks) | | starting plan: colour, then tones |
 | 1 `correct_colour` 0.9 | "cast 13.58 with faded blacks (0.239) = ageing tint" | kept: cast 13.6 → 8.3, structure 0.999 | nothing new |
-| 2 `enhance_contrast` clip 0 | "black_point 0.239 > 0.15: blacks faded" | kept: black point → 0.024; **noise growth 1.00×**, so the extra grain is revealed, not created | **revealed:** grain 7.1 → 10.3 and scratches 0.89% → 1.78% |
-| 3 `inpaint_scratches` | "scratch_coverage 0.0178 > 0.0045" | kept: coverage → 0.02% | uses the **new** mask |
+| 2 `enhance_contrast` clip 0 | "black_point 0.239 > 0.15: blacks faded" | kept: black point → 0.024; **noise growth 1.00×**, so the extra grain is revealed, not created | **revealed:** grain 7.1 → 10.3 and confident scratches 0.52% → 0.81% |
+| 3 `inpaint_scratches` | "scratch_coverage 0.0081 > 0.0045" | kept: coverage → 0% | uses the **new** full mask |
 | 4 `denoise` 10.1 | "noise_sigma 10.13 > 6.0" (strength set from the re-measured grain, not the starting 7.1) | kept: method noise 0.91× (removed about the estimated grain, not detail) | |
 
 **Why it matters.** The damage is synthetic and seeded, so the true scratch
-and dust positions are known (green in the figure).
+and dust positions are known (green in the figure). The table measures the full
+repair mask; `scratch_coverage` above counts only the confident marks that
+justify repairing.
 
 | | mask size | precision (on real marks) | recall (real marks found) |
 |---|---|---|---|
@@ -38,10 +40,10 @@ over-strong settings. Case: astronaut, faded.
 |---|---|---|
 | 1 | `enhance_contrast` clip 4.0 *(injected mistake)* | **rejected**: "created grain: noise grew 1.56× relative to the tones (max 1.15)". Its own target improved (black point fixed), so the old check would have kept it |
 | 2 | `enhance_contrast` clip 0.6 (gentler retry) | kept: noise growth 1.05× |
-| 3 | `inpaint_scratches` | kept |
 
-Across 35 cases, the planner injected 29 mistakes. With the verifier on, mean SSIM was 0.827 (no mistakes: 0.830).
-With it off, mean SSIM was 0.797. It helped in 10 cases and made none worse.
+Across 35 cases, the planner injected 21 mistakes. With the verifier on, mean
+SSIM was 0.832 (no mistakes: 0.834). With it off, mean SSIM was 0.800. It helped
+in 10 cases and made none worse.
 
 ## 3. A measurement turns into a question instead of an action (Warm café table)
 
@@ -49,7 +51,7 @@ Perception reports `highlight_cast 21.9` with `black_point 0.012`. Aged prints
 fade their blacks as well as tinting their highlights. Here the blacks are
 intact, so the tint may be the real colour of the scene (coffee, wood). The
 planner does **not** correct it. It pauses that repair and asks the person,
-showing the measured evidence. The other repairs (grain, dust) carry on. The
+showing the measured evidence. The other repair (grain) carries on. The
 answer re-runs the agent with `restore(img, answers={"correct_colour": …})`.
 
 ## Honest notes
@@ -57,8 +59,8 @@ answer re-runs the agent with `restore(img, answers={"correct_colour": …})`.
 - In the first example the starting measurement already called for inpainting.
   What the re-measurement changed was **what** got inpainted (the mask) and the
   denoise strength.
-- On profiles that add no scratches, the same re-measurement sometimes flags
-  thin real detail (tower lattice, tripod legs, a cup rim) as "revealed
-  scratches", and the agent inpaints it. This is a known false positive, listed
-  in the report's limitations. We swapped out a demo sample whose description
-  depended on it.
+- On profiles that add no scratches, the re-measurement can still rise after a
+  tone step, because thin real detail gets more contrast. Earlier versions then
+  inpainted that detail. Since repairs are decided from confident marks only
+  (report section 6.5), no photo without marks is inpainted. The "revealed" badge
+  can still appear in its trace.

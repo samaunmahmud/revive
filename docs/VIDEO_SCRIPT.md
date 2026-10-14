@@ -20,7 +20,7 @@ CloudFront), voice-over recorded separately. **[bracketed]** = what's on screen.
 > between an agent and a filter chain."
 
 ### 0:25–0:50 · Result
-**[Drag the before/after slider slowly. Point at the damage score 5.7 → 0.0.]**
+**[Drag the before/after slider slowly. Point at the damage score 4.6 → 0.0.]**
 
 > "Colour cast removed, tones restored, scratches filled, grain reduced, with every
 > decision explained in the log."
@@ -32,7 +32,7 @@ CloudFront), voice-over recorded separately. **[bracketed]** = what's on screen.
 > inventing pixels, so ReVive shows me exactly what it wants to repair and asks
 > first."
 
-**[Click "Approve repair mask". The re-run streams; score 32.7 → 5.0.]**
+**[Click "Approve repair mask". The re-run streams; score 27.0 → 5.0.]**
 
 **[Click "Warm café table". The colour question appears.]**
 
@@ -43,9 +43,9 @@ CloudFront), voice-over recorded separately. **[bracketed]** = what's on screen.
 ### 1:40–2:10 · Do no harm
 **[Click "Undamaged control". Zero steps; "Restored" with 0 repairs.]**
 
-> "And when nothing is wrong, it does nothing. On undamaged photos ReVive keeps
-> 99.4 percent structural similarity. A naive enhance-everything pipeline drops
-> them to 75."
+> "And when nothing is wrong, it does nothing. On undamaged photos ReVive makes
+> zero changes. A naive enhance-everything pipeline drops them to 75 percent
+> structural similarity. And it never repaints a photo that has no scratches."
 
 ### 2:10–2:50 · Architecture
 **[Show docs/architecture.svg, then docs/agent-workflow.svg; highlight boxes as you speak.]**
@@ -72,7 +72,7 @@ Graviton. Here's what it bought us." **[benchmark table]**
 > like over-strong contrast and over-strong denoising. With the verifier off,
 > quality drops to 0.80. With it on, the agent rejects those steps, retries
 > gently, and gets 0.83, almost the same as with no mistakes. We also hit the LLM
-> planner with 114 simulated failures, and every restoration still finished."
+> planner with 105 simulated failures, and every restoration still finished."
 
 **[docs/figures/trace-astronaut-aged.png]**
 
@@ -83,10 +83,9 @@ Graviton. Here's what it bought us." **[benchmark table]**
 ### 3:50–4:15 · Honest limits
 **[Bulleted slide]**
 
-> "It isn't perfect. Thin real details, like a tripod leg, can be mistaken for
-> scratches. Heavy damage is restored more conservatively than an aggressive
-> filter chain. And we've only tested on synthetic damage so far. It's all in
-> the report."
+> "It isn't perfect. Heavy damage is restored more conservatively than an
+> aggressive filter chain, and faint scratches in busy texture can be missed. And
+> most of our numbers come from synthetic damage. It's all in the report."
 
 ### 4:15–4:30 · Team and close
 **[Face cam or photo + name card: Samaun Mahmud, solo, second-year CS (AI)]**
