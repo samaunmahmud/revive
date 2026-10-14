@@ -8,3 +8,6 @@ python-multipart==0.0.32
 # evaluation only
 scikit-image==0.26.0
 matplotlib==3.11.2
+# tests
+pytest==9.1.1
+httpx2==2.13.1

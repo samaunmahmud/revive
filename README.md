@@ -131,6 +131,17 @@ Run `teardown.sh` when you don't need it.
 The same image runs locally:
 `docker build --platform linux/arm64 -t revive . && docker run -p 8000:8000 revive`.
 
+## Tests
+
+```bash
+python -m pytest        # 23 tests, ~4 s: perception, agent promises, web API
+```
+
+They cover do-no-harm (undamaged photos come back byte-identical), verifier
+rejection and gentler retry, colour and mask questions with resumed answers,
+Bedrock failure fallback, the live event stream, and API input validation
+(junk uploads, unknown tools, path traversal).
+
 ## Reproducing the evaluation
 
 ```bash
