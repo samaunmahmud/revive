@@ -41,6 +41,11 @@ TARGET = {
 }
 REVEALABLE = ("noise_sigma", "scratch_coverage")
 
+# Side-effect checks: catch repairs that "work" on their own metric but do harm.
+# Both use only the before/after images (no clean reference), so they apply to real photos.
+NOISE_GROWTH_MAX = 1.15   # enhance_contrast: grain may grow with the tone stretch (revealed), not faster (created)
+METHOD_NOISE_MAX = 1.30   # denoise: may remove about the estimated noise; much more means real detail went too
+
 
 # ---------- verification ----------
 
@@ -58,6 +63,30 @@ def structure_similarity(a, b) -> float:
     va, vb, cov = g(ga * ga) - mu_a ** 2, g(gb * gb) - mu_b ** 2, g(ga * gb) - mu_a * mu_b
     ssim = ((2 * mu_a * mu_b + c1) * (2 * cov + c2)) / ((mu_a ** 2 + mu_b ** 2 + c1) * (va + vb + c2))
     return float(ssim.mean())
+
+
+def side_effects(tool, before_img, after_img, before: dict, after: dict):
+    """Returns (ok, why, measured) for repairs whose own metric can't see the harm they do.
+
+    enhance_contrast: a pure tone stretch scales noise and tonal range together, so
+      noise/contrast stays ~1.0x. Local contrast (CLAHE) pushed too far amplifies
+      grain beyond the stretch: that is created noise, not revealed noise.
+    denoise ("method noise", Buades et al.): what NL-means removes should look like
+      the noise it estimated. Removing much more than that means it smoothed away detail.
+    """
+    if tool == "enhance_contrast":
+        growth = (after["noise_sigma"] / max(after["contrast"], 1e-3)) / \
+                 max(before["noise_sigma"] / max(before["contrast"], 1e-3), 1e-6)
+        return (growth <= NOISE_GROWTH_MAX,
+                f"created grain: noise grew {growth:.2f}x relative to the tones (max {NOISE_GROWTH_MAX})",
+                {"noise_growth": round(float(growth), 3)})
+    if tool == "denoise":
+        gray = lambda x: cv2.cvtColor(x, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        ratio = float((gray(before_img) - gray(after_img)).std()) / max(before["noise_sigma"], 1e-6)
+        return (ratio <= METHOD_NOISE_MAX,
+                f"removed detail: took away {ratio:.2f}x the estimated grain (max {METHOD_NOISE_MAX})",
+                {"method_noise": round(ratio, 3)})
+    return True, "", {}
 
 
 def damage_score(r: dict) -> float:
@@ -203,7 +232,7 @@ def _approved_params(tool, history):
     return params, note
 
 
-def restore(img, planner=None, log=print, answers=None, on_event=None):
+def restore(img, planner=None, log=print, answers=None, on_event=None, verify=True):
     """Run the agent on one image. Returns (restored_image, trace).
 
     answers: optional {tool: bool} — a human's replies to questions the agent
@@ -213,6 +242,10 @@ def restore(img, planner=None, log=print, answers=None, on_event=None):
     on_event: optional callback(kind, payload, image=None, mask=None) for live
     observers (the web UI streams these). kinds: "start", "step", "human",
     "question". It only observes; it never changes what the agent does.
+
+    verify: set False only for ablation experiments (eval/agentic.py): every
+    step is kept regardless of the re-measurement, to show what the verifier
+    prevents.
     """
     answers = answers or {}
     emit = on_event or (lambda *a, **k: None)
@@ -273,7 +306,8 @@ def restore(img, planner=None, log=print, answers=None, on_event=None):
         metric, min_gain = TARGET[tool]
         gain = report[metric] - new_report[metric]
         target_ok = gain >= min_gain
-        kept = target_ok and structure >= floor
+        side_ok, side_why, checks = side_effects(tool, current, candidate, report, new_report)
+        kept = (target_ok and structure >= floor and side_ok) if verify else True
         revealed = {m: [report[m], new_report[m]] for m in REVEALABLE
                     if m != metric and new_report[m] > report[m] * 1.15 and new_report[m] - report[m] > 0.3 * (1 if m == "noise_sigma" else 0.003)}
 
@@ -281,16 +315,18 @@ def restore(img, planner=None, log=print, answers=None, on_event=None):
                  "measured_before": perception.public(report), "measured_after": perception.public(new_report),
                  "target": metric, "target_gain": round(float(gain), 4),
                  "score_before": before, "score_after": after, "structure": round(structure, 3),
-                 "revealed": revealed, "kept": kept, "ms": ms}
+                 "checks": checks, "revealed": revealed, "kept": kept, "ms": ms}
         if kept:
             current, report = candidate, new_report
             blocked.add(tool)
-            entry["verdict"] = f"kept: {metric} improved, structure preserved"
+            entry["verdict"] = (f"kept: {metric} improved, structure preserved" if verify
+                                else "kept (verifier disabled)")
             if revealed:
                 entry["verdict"] += "; revealed hidden " + ", ".join(revealed)
         else:
             why = (f"{metric} did not improve enough" if not target_ok
-                   else f"structure {structure:.3f} below {floor}")
+                   else f"structure {structure:.3f} below {floor}" if structure < floor
+                   else side_why)
             retries[tool] = retries.get(tool, 0) + 1
             if retries[tool] > MAX_RETRIES:
                 blocked.add(tool)

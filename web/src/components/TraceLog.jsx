@@ -28,6 +28,8 @@ function StepEntry({ s }) {
           </span>
         )}
         <span className="fact">structure {s.structure}</span>
+        {s.checks?.noise_growth !== undefined && <span className="fact" title="grain growth relative to the tone stretch; above 1.15 means the step created grain">noise growth {s.checks.noise_growth}×</span>}
+        {s.checks?.method_noise !== undefined && <span className="fact" title="what denoise removed vs the estimated grain; above 1.3 means it removed detail">removed {s.checks.method_noise}× grain</span>}
         <span className="fact dim">{s.ms} ms</span>
       </div>
       {Object.entries(s.revealed || {}).map(([m, [a, b]]) => (
