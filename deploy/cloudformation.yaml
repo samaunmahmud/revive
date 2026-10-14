@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  ReVive - agentic photo restoration with OpenCV 5. One Graviton (ARM64) EC2
+  instance runs the container; CloudFront gives it a public HTTPS URL; S3
+  archives uploads, results and traces; the instance role can call Amazon Bedrock.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI (ARM64), e.g. 123456789012.dkr.ecr.eu-west-2.amazonaws.com/revive:abc123
+  InstanceType:
+    Type: String
+    Default: t4g.small
+    AllowedValues: [t4g.small, t4g.medium, c7g.large, c7g.xlarge, c8g.large]
+    Description: Graviton instance type
+  ModelId:
+    Type: String
+    Default: anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model or inference profile ID for the LLM planner
+  CloudFrontPrefixList:
+    Type: String
+    Description: ID of the com.amazonaws.global.cloudfront.origin-facing managed prefix list in this region (deploy.sh looks it up)
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+
+Conditions:
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+
+Resources:
+  # ---------- network: one public subnet ----------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: revive }]
+  Igw:
+    Type: AWS::EC2::InternetGateway
+  IgwAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref Igw }
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{ Key: Name, Value: revive-public }]
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref Vpc }
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttach
+    Properties: { RouteTableId: !Ref RouteTable, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Igw }
+  SubnetRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref Subnet, RouteTableId: !Ref RouteTable }
+
+  # Only CloudFront can reach the instance; no SSH (use SSM Session Manager)
+  WebSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTP from CloudFront only
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourcePrefixListId: !Ref CloudFrontPrefixList
+
+  # ---------- storage ----------
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-jobs
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # ---------- permissions ----------
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: revive-app
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject]
+                Resource: !Sub "${Bucket.Arn}/*"
+              # Converse uses bedrock:InvokeModel. Cross-region inference profiles
+              # route to models in several regions, so the resource is not pinned.
+              - Effect: Allow
+                Action: [bedrock:InvokeModel, bedrock:InvokeModelWithResponseStream]
+                Resource: "*"
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref Role] }
+
+  # ---------- compute: Graviton ----------
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [!Ref WebSg]
+      IamInstanceProfile: !Ref InstanceProfile
+      MetadataOptions:
+        HttpTokens: required          # IMDSv2 only
+        HttpPutResponseHopLimit: 2    # lets the container reach the instance role credentials
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true }
+      Tags: [{ Key: Name, Value: revive }]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          dnf install -y docker
+          systemctl enable --now docker
+          cat > /etc/revive.env <<EOF
+          AWS_REGION=${AWS::Region}
+          AWS_DEFAULT_REGION=${AWS::Region}
+          REVIVE_S3_BUCKET=${Bucket}
+          REVIVE_MODEL_ID=${ModelId}
+          REVIVE_WORKERS=2
+          EOF
+          # revive-update <image-uri>: pull and (re)start the app; deploy.sh calls this via SSM
+          cat > /usr/local/bin/revive-update <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          IMAGE="$1"
+          REGISTRY="${!IMAGE%%/*}"
+          aws ecr get-login-password --region "${AWS::Region}" | docker login --username AWS --password-stdin "$REGISTRY"
+          docker pull "$IMAGE"
+          docker rm -f revive 2>/dev/null || true
+          docker run -d --name revive --restart always -p 80:8000 --env-file /etc/revive.env "$IMAGE"
+          docker image prune -f
+          EOF
+          chmod +x /usr/local/bin/revive-update
+          /usr/local/bin/revive-update "${ImageUri}"
+
+  # Stable address, so CloudFront's origin survives an instance stop/start
+  Eip:
+    Type: AWS::EC2::EIP
+    DependsOn: IgwAttach
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Instance
+
+  # ---------- HTTPS front door ----------
+  Cdn:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: ReVive
+        PriceClass: PriceClass_100
+        HttpVersion: http2and3
+        Origins:
+          - Id: app
+            DomainName: !Join
+              - ""
+              - - "ec2-"
+                - !Join ["-", !Split [".", !Ref Eip]]
+                - !If [IsUsEast1, ".compute-1.amazonaws.com", !Sub ".${AWS::Region}.compute.amazonaws.com"]
+            CustomOriginConfig:
+              HTTPPort: 80
+              OriginProtocolPolicy: http-only
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: app
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          # API + live SSE stream: never cache, forward everything except Host
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad          # Managed-CachingDisabled
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # Managed-AllViewerExceptHostHeader
+        CacheBehaviors:
+          # Vite's content-hashed JS/CSS can be cached at the edge
+          - PathPattern: /assets/*
+            TargetOriginId: app
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6        # Managed-CachingOptimized
+            Compress: true
+
+Outputs:
+  Url:
+    Description: Public HTTPS URL of the app
+    Value: !Sub "https://${Cdn.DomainName}"
+  BucketName:
+    Value: !Ref Bucket
+  InstanceId:
+    Value: !Ref Instance

@@ -1,0 +1,13 @@
+.git
+.venv
+.idea
+data
+eval/results
+web/node_modules
+web/dist
+**/__pycache__
+**/*.pyc
+*.jpg
+!server/samples/*
+CLAUDE.md
+.env

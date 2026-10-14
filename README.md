@@ -68,6 +68,38 @@ Bedrock needs AWS credentials, plus optional `AWS_REGION` and `REVIVE_MODEL_ID`.
 the model call fails, the agent falls back to the heuristic planner and notes it
 in the trace.
 
+## Deploy on AWS (Graviton)
+
+```
+browser ──HTTPS──▶ CloudFront ──HTTP (CloudFront IPs only)──▶ EC2 t4g.small (Graviton, ARM64)
+                                                                │  Docker: FastAPI + React + OpenCV 5 agent
+                                                                ├──▶ Amazon Bedrock (LLM planner, Converse API)
+                                                                └──▶ Amazon S3 (originals, results, traces)
+```
+
+Everything is one CloudFormation stack (`deploy/cloudformation.yaml`): VPC, Graviton
+instance (IMDSv2, no SSH; admin via SSM Session Manager), Elastic IP, CloudFront
+(caching off for the API and live stream, on for hashed assets), a private
+encrypted S3 bucket with 30-day expiry, and an instance role scoped to that bucket,
+Bedrock and ECR pull.
+
+Prerequisites: AWS CLI v2 with credentials (`aws configure`), Docker running, and
+Bedrock model access for Anthropic models in your region.
+
+```bash
+python deploy/check_bedrock.py --only haiku     # which Claude IDs work on this account
+REVIVE_MODEL_ID=<working id> ./deploy/deploy.sh # build ARM64 image → ECR → stack; prints the URL
+./deploy/deploy.sh                              # later: push a new image and restart (~2 min)
+./deploy/teardown.sh                            # delete everything (stack, bucket contents, ECR)
+```
+
+Defaults: region `eu-west-2` (`AWS_REGION`), instance `t4g.small`
+(`REVIVE_INSTANCE_TYPE`). Rough cost while running: t4g.small ≈ $0.019/h, public
+IPv4 ≈ $0.005/h, CloudFront and S3 within free-tier volumes for a demo, so about
+$0.60 a day. Run `teardown.sh` when you don't need it.
+
+The same image runs locally: `docker build --platform linux/arm64 -t revive . && docker run -p 8000:8000 revive`.
+
 ## Evaluation
 
 `python -m eval.evaluate` takes 5 public-domain images, applies 7 seeded damage
@@ -116,7 +148,10 @@ eval/evaluate.py       benchmark vs damaged input and fixed pipeline
 restore.py             command-line entry point
 server/app.py          FastAPI: jobs, live SSE trace, human answers, serves the web app
 server/jobs.py         runs the agent on a background thread and records its events
+server/storage.py      archives finished jobs to S3 when REVIVE_S3_BUCKET is set
 web/                   React + Vite frontend
+deploy/                CloudFormation stack, deploy/teardown scripts, Bedrock model check
+Dockerfile             ARM64 image: builds the UI, runs FastAPI + the agent
 ```
 
 ## Roadmap to submission (deadline 26 Oct, 11:59pm PT)
