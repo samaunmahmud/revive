@@ -23,14 +23,15 @@ from revive import agent
 from . import storage
 
 DATA_DIR = os.environ.get("REVIVE_DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "jobs"))
-MAX_SIDE = 1600           # downscale big uploads: NL-means denoising on 12 MP takes tens of seconds
+MAX_SIDE = 1600           # live preview size: fast enough to watch the agent work
+FULL_MAX_SIDE = 4096      # "restore at full size" cap: ~16 MP, tens of seconds on a small Graviton
 MAX_JOBS_KEPT = 200       # oldest job folders are deleted beyond this
 RUN_SLOTS = threading.BoundedSemaphore(int(os.environ.get("REVIVE_WORKERS", "2")))
 
 
-def prepare(img: np.ndarray) -> np.ndarray:
+def prepare(img: np.ndarray, max_side: int = MAX_SIDE) -> np.ndarray:
     h, w = img.shape[:2]
-    scale = MAX_SIDE / max(h, w)
+    scale = max_side / max(h, w)
     if scale < 1:
         img = cv2.resize(img, (round(w * scale), round(h * scale)), interpolation=cv2.INTER_AREA)
     return img
@@ -49,11 +50,13 @@ def mask_overlay(mask: np.ndarray) -> np.ndarray:
 
 
 class Job:
-    def __init__(self, original: np.ndarray, planner: str, answers: dict, parent: str | None = None):
+    def __init__(self, original: np.ndarray, planner: str, answers: dict, parent: str | None = None,
+                 full: np.ndarray | None = None, full_res: bool = False):
         self.id = uuid.uuid4().hex[:12]
         self.planner = planner
         self.answers = dict(answers)
         self.parent = parent
+        self.full_res = full_res  # this job IS the full-size run
         self.dir = os.path.join(DATA_DIR, self.id)
         self.created = time.time()
         self.events: list[dict] = []
@@ -63,6 +66,11 @@ class Job:
         os.makedirs(self.dir, exist_ok=True)
         cv2.imwrite(self._path("original.png"), original)        # lossless, re-used by answer re-runs
         cv2.imwrite(self._path("original.jpg"), original, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        # keep the larger upload, if any, for a later full-size run
+        self.full_size = None
+        if full is not None and max(full.shape[:2]) > max(original.shape[:2]):
+            cv2.imwrite(self._path("upload.png"), full)
+            self.full_size = [full.shape[1], full.shape[0]]
 
     # ---------- files ----------
 
@@ -74,6 +82,9 @@ class Job:
 
     def original(self) -> np.ndarray:
         return cv2.imread(self._path("original.png"))
+
+    def full_original(self) -> np.ndarray | None:
+        return cv2.imread(self._path("upload.png")) if self.full_size else None
 
     # ---------- events ----------
 
@@ -130,6 +141,7 @@ class Job:
                                                 log=lambda *_: None, on_event=self._on_event)
                 trace["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
                 trace["job_id"], trace["parent_job"] = self.id, self.parent
+                trace["size"], trace["full_res"] = [restored.shape[1], restored.shape[0]], self.full_res
                 cv2.imwrite(self._path("restored.png"), restored)
                 cv2.imwrite(self._path("restored.jpg"), restored, [cv2.IMWRITE_JPEG_QUALITY, 92])
                 with open(self._path("trace.json"), "w") as fh:
@@ -137,6 +149,7 @@ class Job:
                 self.trace = trace
                 archived = storage.archive(self.id, self.dir)
                 self._push("done", {"trace": trace, "restored": self.url("restored.jpg"), "archive": archived,
+                                    "full_size": self.full_size,
                                     "restored_png": self.url("restored.png"), "original": self.url("original.jpg")})
             except Exception as e:
                 traceback.print_exc()
@@ -155,8 +168,8 @@ class JobStore:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
 
-    def create(self, original, planner, answers, parent=None) -> Job:
-        job = Job(original, planner, answers, parent)
+    def create(self, original, planner, answers, parent=None, full=None, full_res=False) -> Job:
+        job = Job(original, planner, answers, parent, full=full, full_res=full_res)
         with self._lock:
             self._jobs[job.id] = job
             for old in sorted(self._jobs.values(), key=lambda j: j.created)[:-MAX_JOBS_KEPT]:

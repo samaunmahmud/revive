@@ -89,7 +89,9 @@ uvicorn server.app:app --port 8000                    # open http://localhost:80
 
 The UI streams the agent's trace live (Server-Sent Events). It shows the damage
 mask when the agent asks for approval, and it re-runs the agent with your answers
-through `restore(img, answers=...)`. Five demo photos ship in `server/samples`
+through `restore(img, answers=...)`. Large uploads restore live as a 1600 px
+preview. **Restore at full size** then re-runs the agent on the full upload (up
+to 4096 px) with the same answers. Five demo photos ship in `server/samples`
 (regenerate them with `python -m server.make_samples`). For frontend development,
 run `uvicorn server.app:app --reload` alongside `npm run dev` in `web/`; Vite on
 :5173 proxies `/api` to :8000.

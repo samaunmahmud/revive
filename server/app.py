@@ -25,12 +25,13 @@ from pydantic import BaseModel
 
 from revive.tools import TOOLS
 from . import storage
-from .jobs import MAX_SIDE, JobStore, prepare
+from .jobs import FULL_MAX_SIDE, MAX_SIDE, JobStore, prepare
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAMPLES_DIR = os.path.join(ROOT, "server", "samples")
 WEB_DIST = os.path.join(ROOT, "web", "dist")
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+MAX_PIXELS = 40_000_000  # decoded size limit, protects server memory
 FILE_NAME = re.compile(r"^[a-z0-9_-]+\.(png|jpg|json)$")
 
 app = FastAPI(title="ReVive", version="0.1.0")
@@ -59,7 +60,8 @@ def health():
 
 @app.get("/api/config")
 def config():
-    return {"bedrock": bedrock_status(), "max_side": MAX_SIDE, "storage": storage.describe()}
+    return {"bedrock": bedrock_status(), "max_side": MAX_SIDE, "full_max_side": FULL_MAX_SIDE,
+            "storage": storage.describe()}
 
 
 @app.get("/api/samples")
@@ -86,9 +88,11 @@ async def create_job(file: UploadFile | None = File(None), sample: str | None = 
         img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         if img is None:
             raise HTTPException(400, "could not read that file as an image (JPEG, PNG, WebP, TIFF or BMP)")
+        if img.shape[0] * img.shape[1] > MAX_PIXELS:
+            raise HTTPException(413, "image is larger than 40 megapixels")
     else:
         raise HTTPException(400, "send a file or a sample id")
-    job = jobs.create(prepare(img), planner, answers={})
+    job = jobs.create(prepare(img), planner, answers={}, full=prepare(img, FULL_MAX_SIDE))
     return {"job_id": job.id}
 
 
@@ -102,8 +106,8 @@ def _job(job_id: str):
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
     job = _job(job_id)
-    return {"job_id": job.id, "finished": job.finished, "planner": job.planner,
-            "answers": job.answers, "parent": job.parent, "trace": job.trace}
+    return {"job_id": job.id, "finished": job.finished, "planner": job.planner, "answers": job.answers,
+            "parent": job.parent, "full_size": job.full_size, "full_res": job.full_res, "trace": job.trace}
 
 
 @app.get("/api/jobs/{job_id}/events")
@@ -141,7 +145,24 @@ def answer(job_id: str, body: Answers):
     unknown = [k for k in body.answers if k not in TOOLS]
     if unknown:
         raise HTTPException(400, f"can only answer questions about tools, not {unknown}")
-    child = jobs.create(job.original(), job.planner, {**job.answers, **body.answers}, parent=job.id)
+    child = jobs.create(job.original(), job.planner, {**job.answers, **body.answers}, parent=job.id,
+                        full=job.full_original(), full_res=job.full_res)
+    return {"job_id": child.id}
+
+
+@app.post("/api/jobs/{job_id}/fullres")
+def full_resolution(job_id: str):
+    """Run the agent again on the full-size upload, with the same answers.
+
+    The preview is planned on a downscaled copy, which averages away fine grain
+    and thin scratches, so the full-size run re-measures rather than replaying
+    the preview's steps. It streams like any other job and can still ask.
+    """
+    job = _job(job_id)
+    full = job.full_original()
+    if full is None:
+        raise HTTPException(400, "this photo is already at full size")
+    child = jobs.create(full, job.planner, dict(job.answers), parent=job.id, full_res=True)
     return {"job_id": child.id}
 
 

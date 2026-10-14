@@ -159,8 +159,15 @@ The other two examples:
 - The instance accepts HTTP only from CloudFront's managed prefix list.
 - IMDSv2 is required.
 - There is no SSH.
-- Uploads are size-checked, decoded with `imdecode`, and downscaled to at most
-  1600 px.
+- Uploads are size-checked (15 MB, 40 MP), decoded with `imdecode` (EXIF
+  rotation, 16-bit TIFF, greyscale and transparency handled), and restored live
+  as a 1600 px preview.
+- **Full size:** "Restore at full size" runs the agent again on the upload (up
+  to 4096 px) with the same answers. It does not replay the preview's steps,
+  because downscaling averages away fine grain and thin scratches. Replaying a
+  4× downscaled plan at full size left the grain in (SSIM 0.36), while
+  re-measuring at full size reached 0.75. On a 2400 px upload, the full-size run
+  found and removed grain the preview could not see.
 
 **Deployment.**
 - `deploy/deploy.sh` builds the ARM64 image, pushes it to ECR, and creates or

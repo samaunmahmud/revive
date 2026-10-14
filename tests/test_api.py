@@ -111,3 +111,23 @@ def test_phone_photo_exif_rotation_is_applied(client, aged):
     tiff = b"MM\x00*" + struct.pack(">I", 8) + struct.pack(">H", 1) + struct.pack(">HHIHH", 0x0112, 3, 1, 6, 0) + struct.pack(">I", 0)
     exif = b"\xff\xe1" + struct.pack(">H", 2 + 6 + len(tiff)) + b"Exif\x00\x00" + tiff  # Orientation = 6 (rotate 90)
     assert _job_original_shape(client, jpg[:2] + exif + jpg[2:], "phone.jpg", "image/jpeg") == (200, 320, 3)
+
+
+def test_full_size_run_uses_the_large_upload_and_same_answers(client, aged):
+    big = cv2.resize(aged("coffee", "grainy"), (2400, 1600), interpolation=cv2.INTER_CUBIC)
+    ok, png = cv2.imencode(".png", big)
+    job = client.post("/api/jobs", files={"file": ("big.png", png.tobytes(), "image/png")}).json()["job_id"]
+    done = next(d for k, d in events(client, job) if k == "done")
+    assert done["trace"]["size"] == [1600, 1067] and done["full_size"] == [2400, 1600]
+    answered = client.post(f"/api/jobs/{job}/answer", json={"answers": {"correct_colour": False}}).json()["job_id"]
+    events(client, answered)
+    full = client.post(f"/api/jobs/{answered}/fullres").json()["job_id"]
+    trace = next(d for k, d in events(client, full) if k == "done")["trace"]
+    assert trace["full_res"] and trace["size"] == [2400, 1600]
+    assert {"about": "correct_colour", "approved": False} in [{k: h[k] for k in ("about", "approved")} for h in trace.get("human_answers", [])]
+
+
+def test_full_size_not_offered_for_small_photos(client):
+    job = client.post("/api/jobs", data={"sample": "chelsea-clean"}).json()["job_id"]
+    assert next(d for k, d in events(client, job) if k == "done")["full_size"] is None
+    assert client.post(f"/api/jobs/{job}/fullres").status_code == 400

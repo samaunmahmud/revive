@@ -25,4 +25,8 @@ export function answerJob(jobId, answers) {
   }).then(json)
 }
 
+export function fullResJob(jobId) {
+  return fetch(`/api/jobs/${jobId}/fullres`, { method: 'POST' }).then(json)
+}
+
 export const EVENT_KINDS = ['queued', 'start', 'step', 'human', 'question', 'notice', 'done', 'error']

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { answerJob, getConfig, getSamples, startJob } from './api'
+import { answerJob, fullResJob, getConfig, getSamples, startJob } from './api'
 import { useJobStream } from './useJobStream'
 import { fmtScore, toolLabel } from './labels'
 import { summarise } from './summary'
@@ -60,6 +60,7 @@ export default function App() {
     setAnswers((a) => ({ ...a, [about]: approved }))
     run(() => answerJob(jobId, { [about]: approved }))
   }
+  const fullSize = () => run(() => fullResJob(jobId))
   const reset = () => { setJobId(null); setAnswers({}); setSelected(null); setError('') }
 
   const trace = view.done?.trace
@@ -138,6 +139,7 @@ export default function App() {
                   <div className="outcome-text">
                     <span className="status-pill">{trace.status === 'complete' ? 'Restored' : 'Needs your review'}</span>
                     <span className="outcome-meta">
+                      {trace.size && <>{trace.size[0]}×{trace.size[1]}{trace.full_res ? ' (full size)' : view.done.full_size ? ' preview' : ''} · </>}
                       {trace.steps.filter((s) => s.kept).length} repairs kept · {trace.steps.filter((s) => !s.kept).length} rejected · {trace.total_ms} ms · planner {trace.planner}
                     </span>
                     {view.done.archive && <span className="outcome-meta">archived to {view.done.archive}</span>}
@@ -146,7 +148,13 @@ export default function App() {
                     )}
                   </div>
                   <div className="outcome-actions">
-                    <a className="btn primary" href={`${view.done.restored_png}?download=true`}>Download photo</a>
+                    {view.done.full_size && !trace.full_res && (
+                      <button type="button" className="btn primary" onClick={fullSize} disabled={busy}
+                        title="Runs the agent again on your full-size upload with the same answers">
+                        Restore at full size ({view.done.full_size[0]}×{view.done.full_size[1]})
+                      </button>
+                    )}
+                    <a className={`btn ${view.done.full_size && !trace.full_res ? '' : 'primary'}`} href={`${view.done.restored_png}?download=true`}>Download photo</a>
                     <a className="btn" href={`/api/jobs/${jobId}/files/trace.json?download=true`}>Download trace</a>
                     <button type="button" className="btn ghost" onClick={reset}>New photo</button>
                   </div>
