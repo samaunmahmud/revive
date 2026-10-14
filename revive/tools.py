@@ -70,7 +70,7 @@ TOOLS = {
     "inpaint_scratches": {
         "fn": inpaint_scratches,
         "params": {"radius": "int 2-7", "method": "'telea' or 'ns'"},
-        "desc": "Fill detected scratches and dust spots. Use when scratch_coverage > 0.0045.",
+        "desc": "Fill detected scratches and dust spots. Use when scratch_coverage > 0.0045. If repair_area > 0.03 it would repaint a large area: ask_human first.",
     },
     "denoise": {
         "fn": denoise,

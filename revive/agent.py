@@ -21,7 +21,7 @@ MAX_RETRIES = 2
 
 # thresholds (tuned on clean vs damaged samples; see eval/)
 SCRATCH_MIN = 0.0045      # below this, "scratches" are probably real thin detail
-SCRATCH_REVIEW = 0.03     # above this, inpainting would invent large areas -> human approves mask
+SCRATCH_REVIEW = 0.03     # repair_area above this means inventing large areas -> human approves the mask
 NOISE_MIN = 6.0
 FADED_BLACK_POINT = 0.15
 CAST_MIN = 8.0
@@ -144,9 +144,10 @@ class HeuristicPlanner:
                     "reason": f"black_point {r['black_point']} > {FADED_BLACK_POINT}: blacks faded{note}"}
 
         if r["scratch_coverage"] > SCRATCH_MIN and "inpaint_scratches" not in blocked:
-            if r["scratch_coverage"] > SCRATCH_REVIEW:
+            # judged on what would actually be repainted (the full mask), not the confident subset
+            if r.get("repair_area", r["scratch_coverage"]) > SCRATCH_REVIEW:
                 return {"tool": "ask_human", "about": "inpaint_scratches",
-                        "question": f"{r['scratch_coverage']*100:.1f}% of the photo is confidently marked as damage. "
+                        "question": f"Repairing would repaint {r.get('repair_area', r['scratch_coverage'])*100:.1f}% of the photo. "
                                     "Approve the repair mask before I fill it in?",
                         "reason": "large damaged area"}
             f, note = _gentle(history, "inpaint_scratches")

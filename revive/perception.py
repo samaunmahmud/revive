@@ -129,6 +129,8 @@ def analyse(img: np.ndarray) -> dict:
     return {
         # decision metric: confident marks only, so busy real texture doesn't trigger repairs
         "scratch_coverage": round(float((confident_marks(img, mask) > 0).mean()), 5),
+        # share of the photo inpainting would actually repaint (the full mask): the safety measure
+        "repair_area": round(float((mask > 0).mean()), 5),
         "noise_sigma": round(noise, 2),
         "black_point": round(black_point(img), 3),
         "contrast": round(contrast(img), 3),
