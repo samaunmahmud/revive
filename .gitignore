@@ -5,3 +5,8 @@ eval/results/
 *_compare.jpg
 *_trace.json
 .env
+.venv/
+data/
+.idea/
+.DS_Store
+CLAUDE.md
