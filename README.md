@@ -118,6 +118,7 @@ Prerequisites:
 - Bedrock model access for Anthropic models in your region.
 
 ```bash
+./deploy/preflight.sh                           # checks credentials, Docker, regions, Bedrock, COOL; changes nothing
 python deploy/check_bedrock.py --only haiku     # which Claude IDs work on this account
 REVIVE_MODEL_ID=<working id> ./deploy/deploy.sh # build ARM64 image → ECR → stack; prints the URL
 ./deploy/deploy.sh                              # later: push a new image and restart (~2 min)
