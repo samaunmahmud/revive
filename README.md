@@ -134,6 +134,20 @@ about $0.95 a day:
 
 Run `teardown.sh` when you don't need it.
 
+**COOL benchmark** (after subscribing to *Cloud Optimized OpenCV For AWS Graviton4*
+on AWS Marketplace):
+
+```bash
+COOL_AMI=<ami-id from the Marketplace launch page> ./deploy/cool_bench.sh
+```
+
+This launches a c8g.large from the COOL AMI, which benchmarks stock pip OpenCV 5
+**and** COOL on the same machine, plus a c7i.large with stock OpenCV 5 as the
+x86 reference. Prices come from the AWS Pricing API. Each instance uploads its
+results to S3 and terminates itself. The script then writes
+`bench/results/RESULTS.md`, and it refuses to label a run "COOL" unless `cv2`
+is loaded from `/opt/cool`.
+
 The same image runs locally:
 `docker build --platform linux/arm64 -t revive . && docker run -p 8000:8000 revive`.
 

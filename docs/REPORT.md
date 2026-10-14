@@ -292,7 +292,11 @@ tokens.
 ### 6.4 COOL vs stock OpenCV 5 on Graviton **[pending]**
 
 `bench/benchmark.py` measures per-step latency, full-restore latency, throughput
-and cost per 1,000 restores. It runs with both OpenCV builds on the same Graviton4
+and cost per 1,000 restores. `deploy/cool_bench.sh` runs it end to end on AWS
+with one command:
+- pricing comes from the AWS Pricing API;
+- each instance self-terminates;
+- a run is only labelled COOL if `cv2` is loaded from the COOL install. It runs with both OpenCV builds on the same Graviton4
 instance (c8g.large), plus an x86 reference. COOL is the Cloud-Optimized OpenCV
 5.0 Graviton4 AMI; stock is pip `opencv-python-headless==5.0.0.93`.
 
