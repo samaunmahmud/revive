@@ -53,10 +53,17 @@ def structure_similarity(a, b) -> float:
     """SSIM on blurred greyscale: did the step keep the photo's structure?
 
     Blurring first means removing grain or thin scratches isn't punished,
-    but smearing faces and edges is.
+    but smearing faces and edges is. It compares blurred, low-frequency
+    structure, so very large photos are compared on a <= 2048 px copy, and in
+    float32: at 16 MP, float64 working arrays alone would need about 1 GB.
     """
-    ga = cv2.GaussianBlur(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), (0, 0), 2).astype(np.float64)
-    gb = cv2.GaussianBlur(cv2.cvtColor(b, cv2.COLOR_BGR2GRAY), (0, 0), 2).astype(np.float64)
+    side = max(a.shape[:2])
+    if side > 2048:
+        size = (round(a.shape[1] * 2048 / side), round(a.shape[0] * 2048 / side))
+        a = cv2.resize(a, size, interpolation=cv2.INTER_AREA)
+        b = cv2.resize(b, size, interpolation=cv2.INTER_AREA)
+    ga = cv2.GaussianBlur(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), (0, 0), 2).astype(np.float32)
+    gb = cv2.GaussianBlur(cv2.cvtColor(b, cv2.COLOR_BGR2GRAY), (0, 0), 2).astype(np.float32)
     c1, c2 = (0.01 * 255) ** 2, (0.03 * 255) ** 2
     g = lambda x: cv2.GaussianBlur(x, (11, 11), 1.5)
     mu_a, mu_b = g(ga), g(gb)

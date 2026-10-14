@@ -6,7 +6,7 @@
 #
 # Env: AWS_REGION (default eu-west-2), REVIVE_STACK (default revive),
 #      REVIVE_MODEL_ID (Bedrock model / inference profile for the planner),
-#      REVIVE_INSTANCE_TYPE (default t4g.small)
+#      REVIVE_INSTANCE_TYPE (default t4g.medium)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

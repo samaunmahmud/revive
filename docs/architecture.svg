@@ -42,7 +42,7 @@
 
   <!-- EC2 Graviton -->
   <rect x="510" y="140" width="640" height="370" rx="12" fill="#fff" stroke="#2a78d6" stroke-width="1.6"/>
-  <text x="530" y="166" class="k" fill="#2a78d6" style="fill:#2a78d6">EC2 GRAVITON (ARM64) · t4g.small · c8g.large for COOL (planned)</text>
+  <text x="530" y="166" class="k" fill="#2a78d6" style="fill:#2a78d6">EC2 GRAVITON (ARM64) · t4g.medium · c8g.large for COOL (planned)</text>
   <text x="530" y="186" class="xs">IMDSv2 only · no SSH (SSM Session Manager) · reachable from CloudFront IPs only · Elastic IP</text>
 
   <path class="line" d="M470 185 H506" marker-end="url(#arrow)"/>

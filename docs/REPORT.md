@@ -148,7 +148,7 @@ The other two examples:
 
 | component | role |
 |---|---|
-| **EC2 Graviton (ARM64)** | runs one Docker container: FastAPI, the React UI and the agent. t4g.small; c8g.large with COOL **[pending]** |
+| **EC2 Graviton (ARM64)** | runs one Docker container: FastAPI, the React UI and the agent. t4g.medium (4 GB: a 16 MP full-size restore peaks at ~2.1 GB, measured); c8g.large with COOL **[pending]** |
 | **CloudFront** | public HTTPS URL. API and Server-Sent Events uncached; hashed assets cached at the edge |
 | **Amazon Bedrock** | LLM planner (Claude, Converse API) |
 | **Amazon S3** | archive of every finished job (original, restored photo, trace): private, encrypted, 30-day expiry |
@@ -174,7 +174,8 @@ The other two examples:
   updates the single CloudFormation stack.
 - Later releases roll out through SSM Run Command, without replacing the instance.
 - `deploy/teardown.sh` removes everything.
-- Running cost is about **$0.60 a day** (t4g.small).
+- Running cost is about **$0.95 a day** (t4g.medium).
+- Full-size runs go through a single slot, so only one heavy job runs at a time.
 
 **Deployment results [pending]:** live URL, Bedrock model and region that work on
 the account, end-to-end latency through CloudFront.

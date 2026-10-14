@@ -9,11 +9,11 @@ import numpy as np
 
 def noise_sigma(img: np.ndarray) -> float:
     """Estimate grain/noise level (Immerkaer's method on a Laplacian-difference kernel)."""
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float64)
-    kernel = np.array([[1, -2, 1], [-2, 4, -2], [1, -2, 1]], dtype=np.float64)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    kernel = np.array([[1, -2, 1], [-2, 4, -2], [1, -2, 1]], dtype=np.float32)
     resp = cv2.filter2D(gray, -1, kernel)
     h, w = gray.shape
-    return float(np.sum(np.abs(resp)) * np.sqrt(0.5 * np.pi) / (6.0 * (w - 2) * (h - 2)))
+    return float(np.abs(resp).sum(dtype=np.float64) * np.sqrt(0.5 * np.pi) / (6.0 * (w - 2) * (h - 2)))
 
 
 def scratch_mask(img: np.ndarray, noise: float | None = None) -> np.ndarray:

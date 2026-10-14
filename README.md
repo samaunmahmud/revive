@@ -105,8 +105,8 @@ planner and says so in the trace.
 ![architecture](docs/architecture.svg)
 
 Everything is one CloudFormation stack (`deploy/cloudformation.yaml`):
-- a VPC and a Graviton instance (IMDSv2 only, no SSH; admin through SSM Session
-  Manager);
+- a VPC and a Graviton instance (t4g.medium; IMDSv2 only, no SSH; admin through
+  SSM Session Manager);
 - an Elastic IP;
 - CloudFront (caching off for the API and the live stream, on for hashed assets);
 - a private, encrypted S3 bucket with 30-day expiry;
@@ -124,9 +124,11 @@ REVIVE_MODEL_ID=<working id> ./deploy/deploy.sh # build ARM64 image → ECR → 
 ./deploy/teardown.sh                            # delete everything (stack, bucket contents, ECR)
 ```
 
-Defaults are region `eu-west-2` (`AWS_REGION`) and instance `t4g.small`
-(`REVIVE_INSTANCE_TYPE`). While it runs, it costs about $0.60 a day:
-- t4g.small ≈ $0.019/h;
+Defaults are region `eu-west-2` (`AWS_REGION`) and instance `t4g.medium`
+(`REVIVE_INSTANCE_TYPE`). The instance has 4 GB, because a 16 MP full-size restore
+peaks at about 2.1 GB; a 2 GB swap file is a safety net. While it runs, it costs
+about $0.95 a day:
+- t4g.medium ≈ $0.034/h;
 - public IPv4 ≈ $0.005/h;
 - CloudFront and S3 stay within free-tier volumes for a demo.
 

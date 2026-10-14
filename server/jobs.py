@@ -27,6 +27,7 @@ MAX_SIDE = 1600           # live preview size: fast enough to watch the agent wo
 FULL_MAX_SIDE = 4096      # "restore at full size" cap: ~16 MP, tens of seconds on a small Graviton
 MAX_JOBS_KEPT = 200       # oldest job folders are deleted beyond this
 RUN_SLOTS = threading.BoundedSemaphore(int(os.environ.get("REVIVE_WORKERS", "2")))
+FULL_SLOT = threading.BoundedSemaphore(1)  # full-size runs are memory-heavy: one at a time
 
 
 def prepare(img: np.ndarray, max_side: int = MAX_SIDE) -> np.ndarray:
@@ -134,7 +135,7 @@ class Job:
 
     def run(self):
         self._push("queued", {"planner": self.planner, "answers": self.answers, "parent": self.parent})
-        with RUN_SLOTS:
+        with FULL_SLOT if self.full_res else RUN_SLOTS:
             try:
                 t0 = time.perf_counter()
                 restored, trace = agent.restore(self.original(), planner=self._planner(), answers=self.answers,
