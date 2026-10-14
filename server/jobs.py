@@ -25,7 +25,7 @@ from . import storage
 DATA_DIR = os.environ.get("REVIVE_DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "jobs"))
 MAX_SIDE = 1600           # live preview size: fast enough to watch the agent work
 FULL_MAX_SIDE = 4096      # "restore at full size" cap: ~16 MP, tens of seconds on a small Graviton
-MAX_JOBS_KEPT = 200       # oldest job folders are deleted beyond this
+MAX_JOBS_KEPT = 80        # oldest job folders are deleted beyond this (full-size jobs are ~100 MB)
 RUN_SLOTS = threading.BoundedSemaphore(int(os.environ.get("REVIVE_WORKERS", "2")))
 FULL_SLOT = threading.BoundedSemaphore(1)  # full-size runs are memory-heavy: one at a time
 
@@ -36,6 +36,21 @@ def prepare(img: np.ndarray, max_side: int = MAX_SIDE) -> np.ndarray:
     if scale < 1:
         img = cv2.resize(img, (round(w * scale), round(h * scale)), interpolation=cv2.INTER_AREA)
     return img
+
+
+def display(img: np.ndarray) -> np.ndarray:
+    """Copy for the browser only (step views, slider): at most MAX_SIDE px. Downloads stay full size."""
+    return prepare(img, MAX_SIDE)
+
+
+def display_mask(mask: np.ndarray) -> np.ndarray:
+    """Downscale a mask for display without losing 1 px lines (area-average, then any coverage = on)."""
+    h, w = mask.shape[:2]
+    if max(h, w) <= MAX_SIDE:
+        return mask
+    s = MAX_SIDE / max(h, w)
+    small = cv2.resize(mask, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA)
+    return (small > 0).astype(np.uint8) * 255
 
 
 def mask_overlay(mask: np.ndarray) -> np.ndarray:
@@ -66,7 +81,7 @@ class Job:
         self.cond = threading.Condition()
         os.makedirs(self.dir, exist_ok=True)
         cv2.imwrite(self._path("original.png"), original)        # lossless, re-used by answer re-runs
-        cv2.imwrite(self._path("original.jpg"), original, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        cv2.imwrite(self._path("original.jpg"), display(original), [cv2.IMWRITE_JPEG_QUALITY, 92])
         # keep the larger upload, if any, for a later full-size run
         self.full_size = None
         if full is not None and max(full.shape[:2]) > max(original.shape[:2]):
@@ -99,10 +114,10 @@ class Job:
         data = dict(payload)
         tag = {"start": "0", "step": str(payload.get("step")), "question": f"q{payload.get('step')}"}.get(kind)
         if image is not None and tag:
-            cv2.imwrite(self._path(f"img-{tag}.jpg"), image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            cv2.imwrite(self._path(f"img-{tag}.jpg"), display(image), [cv2.IMWRITE_JPEG_QUALITY, 90])
             data["image"] = self.url(f"img-{tag}.jpg")
         if mask is not None and tag:
-            cv2.imwrite(self._path(f"mask-{tag}.png"), mask_overlay(mask))
+            cv2.imwrite(self._path(f"mask-{tag}.png"), mask_overlay(display_mask(mask)))
             data["mask"] = self.url(f"mask-{tag}.png")
             data["mask_coverage"] = round(float((mask > 0).mean()), 5)
         self._push(kind, data)
@@ -144,7 +159,7 @@ class Job:
                 trace["job_id"], trace["parent_job"] = self.id, self.parent
                 trace["size"], trace["full_res"] = [restored.shape[1], restored.shape[0]], self.full_res
                 cv2.imwrite(self._path("restored.png"), restored)
-                cv2.imwrite(self._path("restored.jpg"), restored, [cv2.IMWRITE_JPEG_QUALITY, 92])
+                cv2.imwrite(self._path("restored.jpg"), display(restored), [cv2.IMWRITE_JPEG_QUALITY, 92])
                 with open(self._path("trace.json"), "w") as fh:
                     json.dump(trace, fh, indent=2)
                 self.trace = trace

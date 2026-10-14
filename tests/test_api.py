@@ -131,3 +131,19 @@ def test_full_size_not_offered_for_small_photos(client):
     job = client.post("/api/jobs", data={"sample": "chelsea-clean"}).json()["job_id"]
     assert next(d for k, d in events(client, job) if k == "done")["full_size"] is None
     assert client.post(f"/api/jobs/{job}/fullres").status_code == 400
+
+
+def test_display_images_are_capped_but_download_is_full_size(client, aged):
+    big = cv2.resize(aged("rocket", "faded"), (2400, 1800), interpolation=cv2.INTER_CUBIC)
+    ok, png = cv2.imencode(".png", big)
+    job = client.post("/api/jobs", files={"file": ("big.png", png.tobytes(), "image/png")}).json()["job_id"]
+    events(client, job)
+    full = client.post(f"/api/jobs/{job}/fullres").json()["job_id"]
+    ev = events(client, full)
+    import numpy as np
+    def shape(url):
+        return cv2.imdecode(np.frombuffer(client.get(url).content, np.uint8), cv2.IMREAD_UNCHANGED).shape[:2]
+    step = next(d for k, d in ev if k == "step")
+    done = next(d for k, d in ev if k == "done")
+    assert max(shape(step["image"])) == 1600 and max(shape(done["restored"])) == 1600   # browser copies
+    assert shape(done["restored_png"]) == (1800, 2400)                                   # the download
