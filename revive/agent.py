@@ -190,20 +190,27 @@ DEFAULT_PARAMS = {"inpaint_scratches": {"radius": 3, "method": "telea"},
                   "correct_colour": {"strength": 0.9}}
 
 
-def restore(img, planner=None, log=print, answers=None):
+def restore(img, planner=None, log=print, answers=None, on_event=None):
     """Run the agent on one image. Returns (restored_image, trace).
 
     answers: optional {tool: bool} — a human's replies to questions the agent
     would otherwise ask (True = go ahead, False = leave it). This is how the web
     UI resumes a paused restoration after the person clicks approve/decline.
+
+    on_event: optional callback(kind, payload, image=None, mask=None) for live
+    observers (the web UI streams these). kinds: "start", "step", "human",
+    "question". It only observes; it never changes what the agent does.
     """
     answers = answers or {}
+    emit = on_event or (lambda *a, **k: None)
     planner = planner or HeuristicPlanner()
     current = img.copy()
     report = perception.analyse(current)
     trace = {"planner": planner.name, "initial": perception.public(report),
              "initial_score": damage_score(report), "steps": [], "questions": []}
     history, blocked, retries = [], set(), {}
+    emit("start", {"initial": trace["initial"], "initial_score": trace["initial_score"],
+                   "planner": planner.name}, image=current, mask=report["_mask"])
 
     for step in range(1, MAX_STEPS + 1):
         action = planner.next_action(report, history, blocked)
@@ -215,6 +222,7 @@ def restore(img, planner=None, log=print, answers=None):
         if tool == "ask_human" and action.get("about") in answers:
             about = action["about"]
             trace.setdefault("human_answers", []).append({"step": step, "about": about, "approved": answers[about]})
+            emit("human", trace["human_answers"][-1])
             if not answers[about]:
                 blocked.add(about)
                 log(f"  step {step}: 👤 human declined {about}")
@@ -227,11 +235,13 @@ def restore(img, planner=None, log=print, answers=None):
             blocked.add(about)  # don't apply it; carry on with the other repairs
             trace["questions"].append({"step": step, "about": about, "question": action.get("question", ""),
                                        "measurements": perception.public(report)})
+            emit("question", trace["questions"][-1], image=current, mask=report["_mask"])
             log(f"  step {step}: ❓ ask human about {about}: {action.get('question', '')}")
             continue
 
         t0 = time.perf_counter()
         params = action.get("params", {})
+        mask_used = report["_mask"]
         fn = TOOLS[tool]["fn"]
         candidate = fn(current, report["_mask"], **params) if tool == "inpaint_scratches" else fn(current, **params)
         new_report = perception.analyse(candidate)
@@ -269,6 +279,7 @@ def restore(img, planner=None, log=print, answers=None):
                 entry["verdict"] = f"rejected ({why}); retrying gentler"
         history.append({k: entry[k] for k in ("tool", "params", "kept", "verdict")})
         trace["steps"].append(entry)
+        emit("step", entry, image=candidate, mask=mask_used if tool == "inpaint_scratches" else None)
         log(f"  step {step}: {tool}{params} → {entry['verdict']} (score {before}→{after}, structure {structure:.3f})")
 
     trace["final"] = perception.public(report)
