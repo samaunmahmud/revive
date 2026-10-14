@@ -7,3 +7,4 @@ uvicorn==0.54.0
 python-multipart==0.0.32
 # evaluation only
 scikit-image==0.26.0
+matplotlib==3.11.2

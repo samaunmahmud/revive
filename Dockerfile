@@ -17,9 +17,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     REVIVE_DATA_DIR=/tmp/revive-jobs
 WORKDIR /app
 
-# scikit-image is only needed by the offline evaluation, not the web app
+# everything under "# evaluation only" (scikit-image, matplotlib) stays out of the app image
 COPY requirements.txt ./
-RUN grep -v '^scikit-image' requirements.txt > requirements-runtime.txt \
+RUN sed '/# evaluation only/,$d' requirements.txt > requirements-runtime.txt \
  && pip install --no-cache-dir -r requirements-runtime.txt
 
 COPY revive/ revive/
