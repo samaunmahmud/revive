@@ -70,8 +70,14 @@ numbers: a tool with parameters, `ask_human`, or `done`.
   of blocked tools to Claude via the Amazon Bedrock Converse API, and parses a
   JSON action.
 - The LLM **never sees pixels**, so every decision is grounded in OpenCV output.
-- If the model call fails, the reply isn't valid JSON, or it names an unknown or
-  blocked tool, the heuristic decides that step instead, and the trace says so.
+- The LLM gets its rules in a system prompt generated from the same constants
+  the heuristic and the verifier use, so the two planners cannot drift apart.
+- Its replies are validated:
+  - parameters are whitelisted and clamped to each tool's safe range, so an
+    over-eager value can't crash or overdo a tool;
+  - questions must name a real tool;
+  - if the call fails, the reply isn't valid JSON, or it names an unknown or
+    blocked tool, the heuristic decides that step instead, and the trace says so.
 
 **Act (`revive/tools.py`).** Five OpenCV 5 repairs:
 - `correct_colour`: LAB a/b shift that keeps a little natural warmth;
