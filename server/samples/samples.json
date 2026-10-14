@@ -14,13 +14,6 @@
     "profile": "sepia"
   },
   {
-    "id": "camera-grainy",
-    "title": "Grainy street photo",
-    "description": "Heavy film grain on a black-and-white print. Denoising uncovers scratches hidden under the grain.",
-    "source": "camera_bw",
-    "profile": "grainy"
-  },
-  {
     "id": "coffee-grainy",
     "title": "Warm caf\u00e9 table",
     "description": "Grainy, with warm highlights but intact blacks. Is that ageing or real coffee colour? The agent asks you.",

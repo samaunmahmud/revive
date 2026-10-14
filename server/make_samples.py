@@ -23,8 +23,6 @@ SAMPLES = [
      "Tinted, faded, grainy and scratched. Restoring the tones reveals hidden grain, which a later step removes."),
     ("rocket-sepia", "rocket", "sepia", "Sepia launch",
      "A sepia print. Lifting the faded blacks makes faint scratches visible, so the agent adds a repair it didn't plan at the start."),
-    ("camera-grainy", "camera_bw", "grainy", "Grainy street photo",
-     "Heavy film grain on a black-and-white print. Denoising uncovers scratches hidden under the grain."),
     ("coffee-grainy", "coffee", "grainy", "Warm café table",
      "Grainy, with warm highlights but intact blacks. Is that ageing or real coffee colour? The agent asks you."),
     ("chelsea-heavy", "chelsea", "heavy", "Badly damaged cat",
