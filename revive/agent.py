@@ -190,6 +190,18 @@ DEFAULT_PARAMS = {"inpaint_scratches": {"radius": 3, "method": "telea"},
                   "correct_colour": {"strength": 0.9}}
 
 
+def _approved_params(tool, history):
+    """Settings for a human-approved repair; gentler after each verifier rejection."""
+    f, note = _gentle(history, tool)
+    params = dict(DEFAULT_PARAMS.get(tool, {}))
+    if f < 1:
+        if tool == "inpaint_scratches":
+            params = {"radius": 2, "method": "ns"}
+        elif tool == "correct_colour":
+            params = {"strength": round(0.9 * f, 2)}
+    return params, note
+
+
 def restore(img, planner=None, log=print, answers=None, on_event=None):
     """Run the agent on one image. Returns (restored_image, trace).
 
@@ -209,6 +221,7 @@ def restore(img, planner=None, log=print, answers=None, on_event=None):
     trace = {"planner": planner.name, "initial": perception.public(report),
              "initial_score": damage_score(report), "steps": [], "questions": []}
     history, blocked, retries = [], set(), {}
+    approved = set()  # repairs a human signed off on
     emit("start", {"initial": trace["initial"], "initial_score": trace["initial_score"],
                    "planner": planner.name}, image=current, mask=report["_mask"])
 
@@ -228,8 +241,10 @@ def restore(img, planner=None, log=print, answers=None, on_event=None):
                 log(f"  step {step}: 👤 human declined {about}")
                 continue
             log(f"  step {step}: 👤 human approved {about}")
-            action = {"tool": about, "params": DEFAULT_PARAMS.get(about, {}), "reason": "approved by human"}
+            params, note = _approved_params(about, history)
+            action = {"tool": about, "params": params, "reason": "approved by human" + note}
             tool = about
+            approved.add(about)
         elif tool == "ask_human":
             about = action.get("about", "unknown")
             blocked.add(about)  # don't apply it; carry on with the other repairs
@@ -250,6 +265,10 @@ def restore(img, planner=None, log=print, answers=None, on_event=None):
         before, after = damage_score(report), damage_score(new_report)
         structure = structure_similarity(current, candidate)
         floor = STRUCTURE_FLOOR.get(tool, 0.0)
+        if tool == "inpaint_scratches" and tool in approved:
+            # the person approved repainting this much of the photo, so expect
+            # structure to change by about that much; scratches must still drop
+            floor = round(floor - float((mask_used > 0).mean()), 3)
         metric, min_gain = TARGET[tool]
         gain = report[metric] - new_report[metric]
         target_ok = gain >= min_gain

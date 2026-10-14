@@ -83,7 +83,7 @@ clean original:
 | Damaged input | 0.680 | 25.1 |
 | Fixed pipeline | 0.672 | 18.8 |
 | **ReVive (no human)** | **0.818** | **27.3** |
-| ReVive + simulated human answers | 0.824 | 27.4 |
+| ReVive + simulated human answers | 0.830 | 27.5 |
 
 - 26/35 cases complete automatically (SSIM 0.885); 9 are escalated to a human.
 - On undamaged control photos ReVive leaves the image essentially untouched
