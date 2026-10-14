@@ -9,7 +9,7 @@ human** instead of guessing.
 
 Entry for the OpenCV AI Competition 2026 (powered by AWS): Agentic Vision with OpenCV 5.
 
-**Live demo:** _pending AWS deployment_ · **Report:** [docs/REPORT.md](docs/REPORT.md) ·
+**Live demo:** _pending AWS deployment_ · **Report:** [docs/REPORT.md](docs/REPORT.md) ([PDF](docs/ReVive-report.pdf)) ·
 **Annotated traces:** [docs/trace-example.md](docs/trace-example.md)
 
 ![agent workflow](docs/agent-workflow.svg)
