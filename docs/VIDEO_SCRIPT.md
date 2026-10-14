@@ -34,11 +34,12 @@ CloudFront), voice-over recorded separately. **[bracketed]** = what's on screen.
 
 **[Click "Approve repair mask". The re-run streams; score 27.0 → 5.0.]**
 
-**[Click "Warm café table". The colour question appears.]**
+**[Click "Real 1972 colour slide" (a real public-domain scan). The colour question appears; click "It's ageing, remove it"; drag the slider.]**
 
-> "This one is subtler. The highlights are tinted, but the blacks aren't faded,
-> and real aged prints fade both. So this tint might just be coffee. It asks
-> instead of 'correcting' a real colour."
+> "This one is a real slide from 1972, and it's subtler. The colours are pink,
+> but the blacks aren't faded, and aged prints usually fade both. So the tint
+> could be real light. ReVive asks. I tell it it's ageing, and the true colours
+> come back."
 
 ### 1:40–2:10 · Do no harm
 **[Click "Undamaged control". Zero steps; "Restored" with 0 repairs.]**

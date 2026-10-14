@@ -319,6 +319,36 @@ scratches that break up over similar tones. It found texture on clean photos
 (control SSIM 0.994 → 0.991), and it slightly lowered the aged cases. It only
 gained +0.004 on heavy damage, so it was not shipped.
 
+### 6.7 Real photos (qualitative)
+
+There is no clean original for a real damaged photo, so these are judged by eye.
+`eval/real_photos.py` runs the agent on six public-domain scans from Wikimedia
+Commons (sources and licences in `eval/real_photos/credits.json`).
+
+![real photos](figures/real-photos.png)
+
+*Columns: input · repair mask (yellow = full mask, red = confident marks) ·
+automatic result.*
+
+| photo | what ReVive did | assessment |
+|---|---|---|
+| portrait, 1925 (faded, tinted) | colour cast removed, then tones restored | **good:** neutral tones, real blacks back |
+| colour slide, 1972 (magenta dye fade) | asked "ageing or real colour?" because the blacks are intact; after "ageing", cast 25.5 → 9.2 | **good:** the caution is right, and the approved result looks natural |
+| group photo with heavy emulsion loss | asked before repainting 5.7% of the photo | **correct to ask.** The losses are too large for thin-scratch inpainting either way |
+| naval officers, 1942 (one wide, curved white scratch) | nothing | **miss:** the scratch is 5–8 px wide (the detector expects ≤ 2.5 px), and one scratch is too small a share of the photo to trigger a repair |
+| family, 1877 (scattered emulsion flecks) | nothing | **under-repaired:** few flecks pass as confident marks |
+| 1953 press photo (coarse print grain) | denoised (strength 15), tones restored | **over-smoothed:** faces and wood look waxy, even though the method-noise check passed, because the grain really was that strong |
+
+The real photos also exposed a **safety bug**, now fixed. After the
+confident-marks change, the 3% approval rule compared the confident subset (2.2%)
+while inpainting repainted the full mask (5.7%), and it did so without asking.
+The rule now uses `repair_area`, the share of the photo that would actually be
+repainted.
+
+We also tried detecting wide scratches with an image pyramid (½ and ¼ scale). It
+lowered the synthetic scores (0.822 → 0.818) and still missed the 1942 scratch,
+so it was not shipped.
+
 ## 7. Limitations
 
 - **The scratch cutoff is tuned on synthetic marks.** Our seeded scratches are
@@ -333,7 +363,13 @@ gained +0.004 on heavy damage, so it was not shipped.
 - **Heavy damage:** the conservative agent restores less than an aggressive
   filter chain, even with approval.
 - **Warm subjects under a tint** are slightly over-corrected.
-- **Synthetic damage only.** No real scanned prints have been evaluated yet.
+- **Real scratches wider than ~3 px are missed,** and so is a single scratch on
+  an otherwise clean photo (6.7). The detector is built for thin film-style
+  scratches.
+- **Strong real grain is over-smoothed** (6.7). A grain-retention option would
+  suit archival work better.
+- **Quantitative results are on synthetic damage.** Real photos are evaluated
+  qualitatively only, because there is no clean original to compare against.
 - **Overfitting risk.** The verifier limits (1.15×, 1.3×) and the perception
   thresholds were tuned on the same five images we evaluate on. A held-out set of
   real prints is needed.
@@ -359,6 +395,7 @@ pip install -r requirements.txt
 python -m eval.evaluate        # quality table (6.1)
 python -m eval.agentic         # agentic metrics, verifier ablation, LLM-failure test (6.2)
 python -m eval.trace_example   # annotated trace and ground-truth mask numbers (4)
+python -m eval.real_photos     # real public-domain scans: contact sheet (6.7)
 python -m eval.charts          # figures in docs/figures
 python -m eval.planners        # Bedrock vs heuristic (needs AWS credentials)
 python -m bench.benchmark run --label stock   # COOL benchmark (run on Graviton)

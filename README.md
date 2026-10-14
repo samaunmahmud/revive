@@ -60,9 +60,10 @@ every step:
 - **Known weak spots:**
   - heavy damage, where the naive pipeline scores 0.51 vs 0.43 automatic and 0.51
     with approval;
-  - the scratch threshold is tuned on synthetic, high-contrast marks, so faint
-    real scratches may be missed;
-  - synthetic damage only so far.
+  - on real scans, wide scratches (over ~3 px) and isolated single scratches are
+    missed, and strong grain is over-smoothed;
+  - quantitative numbers come from synthetic damage, while the real photos are
+    judged qualitatively ([report §6.7](docs/REPORT.md)).
 
   See [docs/REPORT.md §7](docs/REPORT.md#7-limitations).
 
@@ -136,6 +137,7 @@ The same image runs locally:
 python -m eval.evaluate        # quality vs damaged input and naive pipeline → eval/results/
 python -m eval.agentic         # success/escalation, verifier ablation, LLM-failure test
 python -m eval.trace_example   # annotated trace with ground-truth scratch positions
+python -m eval.real_photos     # real public-domain scans → docs/figures/real-photos.png
 python -m eval.charts          # figures → docs/figures/
 python -m eval.planners        # Bedrock vs heuristic planner (needs AWS credentials)
 python -m bench.benchmark run --label stock --price <$/h>   # OpenCV latency/throughput/cost
@@ -168,7 +170,7 @@ Dockerfile             ARM64 image: builds the UI, runs FastAPI + the agent
 - [x] Report draft, architecture and agent-workflow diagrams, annotated traces, video script
 - [ ] Deploy live and run the Bedrock-vs-heuristic evaluation
 - [ ] COOL vs stock OpenCV benchmark on Graviton4
-- [ ] Real scanned old photos in the evaluation
+- [x] Real scanned old photos (6 public-domain scans, qualitative; 2 in the demo)
 - [ ] Record the video
 
 ## Responsible use

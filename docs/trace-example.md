@@ -2,7 +2,7 @@
 
 Every number below comes from a real run (`python -m eval.trace_example`,
 `python -m eval.agentic`). You can reproduce the first and third in the web app
-by clicking the **Faded portrait** and **Warm café table** samples.
+by clicking the **Faded portrait** and **Real 1972 colour slide** samples.
 
 ## 1. Re-measurement changes what gets repaired (Faded portrait)
 
@@ -45,14 +45,19 @@ Across 35 cases, the planner injected 21 mistakes. With the verifier on, mean
 SSIM was 0.832 (no mistakes: 0.834). With it off, mean SSIM was 0.800. It helped
 in 10 cases and made none worse.
 
-## 3. A measurement turns into a question instead of an action (Warm café table)
+## 3. A measurement turns into a question instead of an action (real 1972 slide)
 
-Perception reports `highlight_cast 21.9` with `black_point 0.012`. Aged prints
-fade their blacks as well as tinting their highlights. Here the blacks are
-intact, so the tint may be the real colour of the scene (coffee, wood). The
-planner does **not** correct it. It pauses that repair and asks the person,
-showing the measured evidence. The other repair (grain) carries on. The
-answer re-runs the agent with `restore(img, answers={"correct_colour": …})`.
+A real public-domain colour slide from 1972 (NARA, via Wikimedia Commons). Its
+dyes have faded to a strong magenta. Perception reports `highlight_cast 25.5`
+with `black_point 0.067`. Aged prints usually fade their blacks as well as
+tinting their highlights. Here the blacks are intact, so the tint *could* be the
+real light, such as a sunset or a smoggy sky. The planner does **not** correct
+it. It pauses that repair and asks the person, showing the measured evidence.
+
+When the person answers "it's ageing", the agent re-runs with
+`restore(img, answers={"correct_colour": True})`. The cast drops from 25.5 to 9.2
+(structure 0.998), and natural colours return. The figure in the report's
+section 6.7 shows the result.
 
 ## Honest notes
 
