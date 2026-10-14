@@ -82,3 +82,32 @@ def test_files_cannot_escape_the_job_folder(client):
     for name in ("..%2F..%2Fapp.py", "..%2Fsamples.json", "trace.txt"):
         assert client.get(f"/api/jobs/{job}/files/{name}").status_code == 404
     assert client.get("/api/jobs/doesnotexist").status_code == 404
+
+
+def _job_original_shape(client, data, name, mime):
+    import os
+    job = client.post("/api/jobs", files={"file": (name, data, mime)}).json()["job_id"]
+    events(client, job)
+    from server.jobs import DATA_DIR
+    return cv2.imread(os.path.join(DATA_DIR, job, "original.png")).shape
+
+
+def test_archive_scan_formats_are_accepted(client, aged):
+    import numpy as np
+    img = cv2.resize(aged("rocket", "faded"), (320, 240))
+    ok, tiff16 = cv2.imencode(".tiff", img.astype(np.uint16) * 257)              # 16-bit archive scan
+    assert _job_original_shape(client, tiff16.tobytes(), "scan.tiff", "image/tiff") == (240, 320, 3)
+    ok, grey = cv2.imencode(".png", cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))       # greyscale
+    assert _job_original_shape(client, grey.tobytes(), "bw.png", "image/png") == (240, 320, 3)
+    ok, rgba = cv2.imencode(".png", cv2.cvtColor(img, cv2.COLOR_BGR2BGRA))       # transparency
+    assert _job_original_shape(client, rgba.tobytes(), "a.png", "image/png") == (240, 320, 3)
+
+
+def test_phone_photo_exif_rotation_is_applied(client, aged):
+    import struct
+    img = cv2.resize(aged("rocket", "faded"), (200, 320))                        # stored portrait 200x320
+    ok, jpg = cv2.imencode(".jpg", img)
+    jpg = jpg.tobytes()
+    tiff = b"MM\x00*" + struct.pack(">I", 8) + struct.pack(">H", 1) + struct.pack(">HHIHH", 0x0112, 3, 1, 6, 0) + struct.pack(">I", 0)
+    exif = b"\xff\xe1" + struct.pack(">H", 2 + 6 + len(tiff)) + b"Exif\x00\x00" + tiff  # Orientation = 6 (rotate 90)
+    assert _job_original_shape(client, jpg[:2] + exif + jpg[2:], "phone.jpg", "image/jpeg") == (200, 320, 3)
