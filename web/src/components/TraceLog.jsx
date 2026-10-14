@@ -86,7 +86,15 @@ export default function TraceLog({ events, selected, onSelect, running, planner 
             }
           })()
           return (
-            <li key={e.i} className={cls} onClick={clickable ? () => onSelect(e.i) : undefined}>
+            <li
+              key={e.i}
+              className={cls}
+              onClick={clickable ? () => onSelect(e.i) : undefined}
+              onKeyDown={clickable ? (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onSelect(e.i) } } : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              role={clickable ? 'button' : undefined}
+              aria-pressed={clickable ? selected === e.i : undefined}
+            >
               {body}
             </li>
           )

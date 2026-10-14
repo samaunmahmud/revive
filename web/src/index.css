@@ -10,7 +10,7 @@
   --paper: #efe5d2;
   --ink: #eadfca;
   --muted: #a39279;
-  --dim: #75685a;
+  --dim: #948674;          /* >= 4.5:1 on every surface (WCAG AA for small text) */
   --amber: #e2a04f;
   --amber-ink: #2a1a08;
   --damage: #e0573c;
@@ -39,6 +39,7 @@ body {
 
 img { display: block; max-width: 100%; }
 button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
 
 .app { max-width: 1320px; margin: 0 auto; padding: 28px 28px 40px; }
 
