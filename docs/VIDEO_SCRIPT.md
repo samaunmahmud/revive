@@ -1,4 +1,4 @@
-# ReVive demo video script (target 4:30, hard limit 5:00)
+# ReVive demo video script (target 4:45, hard limit 5:00)
 
 Best material first: judges may stop early. The live agent loop is the hook.
 Record the app at 1440×900 in Chrome (deployed URL, so the address bar shows
@@ -25,7 +25,7 @@ CloudFront), voice-over recorded separately. **[bracketed]** = what's on screen.
 > "Colour cast removed, tones restored, scratches filled, grain reduced, with every
 > decision explained in the log."
 
-### 0:50–1:40 · Asks instead of guessing (human control)
+### 0:50–2:05 · Asks instead of guessing, and lets you correct it (human control)
 **[Click "Badly damaged cat". The agent pauses; the question card shows the red damage mask.]**
 
 > "Here almost ten percent of the photo is damaged. Filling that much means
@@ -41,14 +41,22 @@ CloudFront), voice-over recorded separately. **[bracketed]** = what's on screen.
 > could be real light. ReVive asks. I tell it it's ageing, and the true colours
 > come back."
 
-### 1:40–2:10 · Do no harm
+**[Click "Real 1942 scratched print". The agent finds nothing. Click "Touch up damage", paint one stroke along the scratch, click "Repair with my corrections"; drag the slider; point at the "your mask" badge in the log.]**
+
+> "And when it misses something, you can correct what it sees. This 1942 scratch
+> is too wide for its detector, so it left it alone. I paint over it. The agent
+> repairs my mark, then measures that it now blends in with its surroundings,
+> and the trace records that the edit was mine. On test photos, one painted
+> stroke cuts the error inside a missed scratch from 119 to 15."
+
+### 2:05–2:25 · Do no harm
 **[Click "Undamaged control". Zero steps; "Restored" with 0 repairs.]**
 
 > "And when nothing is wrong, it does nothing. On undamaged photos ReVive makes
 > zero changes. A naive enhance-everything pipeline drops them to 75 percent
 > structural similarity. And it never repaints a photo that has no scratches."
 
-### 2:10–2:50 · Architecture
+### 2:25–3:05 · Architecture
 **[Show docs/architecture.svg, then docs/agent-workflow.svg; highlight boxes as you speak.]**
 
 > "Everything runs on AWS. A single container sits on a Graviton ARM instance
@@ -61,7 +69,7 @@ CloudFront), voice-over recorded separately. **[bracketed]** = what's on screen.
 **[If COOL is done:]** "The image processing runs on Cloud-Optimized OpenCV for
 Graviton. Here's what it bought us." **[benchmark table]**
 
-### 2:50–3:50 · Results
+### 3:05–4:05 · Results
 **[docs/figures/ssim_by_profile.png]**
 
 > "On 35 test cases, ReVive lifts structural similarity from 0.68 to 0.82. A fixed
@@ -81,14 +89,14 @@ Graviton. Here's what it bought us." **[benchmark table]**
 > truth. Re-measuring after the tone step found 78 percent of the real scratches,
 > up from 54."
 
-### 3:50–4:15 · Honest limits
+### 4:05–4:30 · Honest limits
 **[Bulleted slide]**
 
 > "It isn't perfect. Heavy damage is restored more conservatively than an
 > aggressive filter chain, and faint scratches in busy texture can be missed. And
 > most of our numbers come from synthetic damage. It's all in the report."
 
-### 4:15–4:30 · Team and close
+### 4:30–4:45 · Team and close
 **[Face cam or photo + name card: Samaun Mahmud, solo, second-year CS (AI)]**
 
 > "I'm Samaun, and I built ReVive solo. It repairs, it doesn't invent, and it

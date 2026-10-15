@@ -134,6 +134,10 @@ def main():
                                          (16, 27, "Told it's ageing, the true colours come back.")]),
         ("clip", "05-control", None, [(1, 11, "Nothing wrong? It changes nothing. Undamaged photos come back untouched.")]),
         ("clip", "06-real-portrait", None, [(1, 16, "A real 1925 portrait: tint removed, faded blacks restored.")]),
+        ("clip", "07-touch-up", None, [(1, 10.5, "A real 1942 print. This scratch is too wide for the detector, so the agent leaves it."),
+                                       (10.5, 21, "You can correct what it sees: paint the scratch it missed."),
+                                       (21, 34, "The agent repairs your mark and checks that it now blends in."),
+                                       (34, 38, "Your edit is recorded in the trace and the summary.")]),
         ("slide", slide(tmp, "arch", "Architecture", "One container on AWS Graviton",
                         "", fig("architecture.svg")), 8,
          [(0.5, 8, "CloudFront → Graviton → OpenCV 5 agent. Bedrock plans from numbers only; S3 keeps every trace.")]),
@@ -150,7 +154,7 @@ def main():
          [(0.5, 7, "After the tone step, OpenCV finds 78% of the real scratches instead of 54%.")]),
         ("slide", slide(tmp, "limits", "Honest limits", "What it doesn't do yet",
                         "<div style='text-align:left;display:inline-block'>"
-                        "• Wide real scratches and isolated single scratches are missed<br>"
+                        "• Wide real scratches are missed automatically (you can paint them in)<br>"
                         "• Heavy damage is restored more conservatively than a filter chain<br>"
                         "• Strong real grain can be over-smoothed<br>"
                         "• The numbers come from synthetic damage; real scans are judged by eye</div><br><br>"

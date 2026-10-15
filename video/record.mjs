@@ -210,6 +210,47 @@ async function main() {
     await sweepSlider()
     await sleep(600)
   })
+  await record('07-touch-up', async () => {
+    // the agent misses a wide real scratch; a person paints it and the agent repairs and checks it
+    await home()
+    await click('.sample', 'Real 1942')
+    await waitDone()
+    await sleep(1200)
+    await scrollTo('.outcome')
+    await sleep(1500)
+    await click('.outcome .btn', 'Touch up')
+    await sleep(600)
+    await scrollTo('.mask-editor', 'start')
+    await sleep(1200)
+    // the scratch, as fractions of the photo (traced by eval/human_edits.py's band method)
+    const SCRATCH = [[0.6963, 0.1709], [0.6987, 0.1915], [0.7037, 0.212], [0.7075, 0.2325], [0.71, 0.253],
+      [0.7113, 0.2735], [0.7163, 0.294], [0.7188, 0.3145], [0.72, 0.335], [0.7225, 0.3556], [0.7262, 0.3761],
+      [0.7262, 0.3966], [0.73, 0.4171], [0.7312, 0.4376], [0.73, 0.4581], [0.7362, 0.4786], [0.7362, 0.4991],
+      [0.735, 0.5197], [0.7262, 0.5402], [0.7262, 0.5607], [0.725, 0.5812], [0.73, 0.6017], [0.7288, 0.6222], [0.7325, 0.6427]]
+    const box = await js(`(() => { const r = document.querySelector('.mask-canvas canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height] })()`)
+    const pts = SCRATCH.map(([u, v]) => [box[0] + u * box[2], box[1] + v * box[3]])
+    await js(`window.__moveCursor(${pts[0][0]}, ${pts[0][1]}, 900)`)
+    await sleep(1150)
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pts[0][0], y: pts[0][1], button: 'left', buttons: 1, clickCount: 1 })
+    for (let i = 1; i < pts.length; i++) {   // a slow, hand-speed stroke with the cursor on it
+      for (let k = 1; k <= 4; k++) {
+        const x = pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * k / 4, y = pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * k / 4
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1 })
+        await js(`window.__moveCursor(${x}, ${y}, 0)`)
+        await sleep(28)
+      }
+    }
+    const last = pts[pts.length - 1]
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: last[0], y: last[1], button: 'left', buttons: 0, clickCount: 1 })
+    await sleep(1600)
+    await click('.mask-editor .btn.primary', 'Repair with my corrections')
+    await waitRerun()
+    await sleep(1200)
+    await scrollTo('.compare')
+    await sweepSlider()
+    await scrollTo('.summary')
+    await sleep(3500)
+  })
   await send('Page.close').catch(() => {})
   process.exit(0)
 }
