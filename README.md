@@ -34,6 +34,11 @@ every step:
 - **It asks instead of guessing.** A colour cast with intact blacks may be the
   real scene (coffee is brown), so it asks. Damage over 3% of the photo means a
   person approves the red damage mask before anything is filled in.
+- **A person can correct what it sees.** In the mask editor you paint damage the
+  detector missed or protect real detail it flagged. The agent applies the edits
+  on top of the mask it re-measures at repair time, and checks that every
+  painted mark now blends in. One stroke fixes a wide scratch the detector
+  cannot see (error inside it 118.6 → 14.7, `eval/human_edits.py`).
 - **Every step is traced:** the measurements before and after, the reason, the
   parameters, the checks, the verdict and the time. The trace streams live to the
   UI and is archived in S3.
@@ -176,6 +181,7 @@ python -m eval.evaluate        # quality vs damaged input and naive pipeline →
 python -m eval.agentic         # success/escalation, verifier ablation, LLM-failure test
 python -m eval.trace_example   # annotated trace with ground-truth scratch positions
 python -m eval.real_photos     # real public-domain scans → docs/figures/real-photos.png
+python -m eval.human_edits     # painted / protected mask corrections → docs/figures/human-edit-tovey.png
 python -m eval.charts          # figures → docs/figures/
 python -m eval.planners        # Bedrock vs heuristic planner (needs AWS credentials)
 python -m bench.benchmark run --label stock --price <$/h>   # OpenCV latency/throughput/cost

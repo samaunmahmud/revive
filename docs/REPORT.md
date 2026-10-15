@@ -28,6 +28,12 @@ harmful steps and recovers almost all the lost quality: mean SSIM is 0.800 with
 the verifier off, **0.832** with it on, and 0.834 with no mistakes at all. Across
 105 simulated LLM failures, every restoration still completed.
 
+A person can also **correct the agent's perception**: paint damage it missed, or
+protect real detail it flagged. The agent applies the corrections at repair time
+and verifies them with its own measurement. One painted stroke repairs a wide
+scratch the detector cannot see (error inside it 118.6 → **14.7**, on a 0–255
+scale), and fixes the 1942 real-photo miss.
+
 ## 2. Problem and users
 
 Family photo archives, local-history societies and small museums hold millions of
@@ -112,6 +118,28 @@ scratches, and later steps then repair them.
 
 The other repairs continue while a question is pending. An answer re-runs the
 agent through `restore(img, answers={tool: bool})`.
+
+**Correct, don't just approve.** For the scratch question, and for any finished
+result, the person can open a brush editor and correct the mask instead of only
+accepting or declining it:
+- **paint** marks damage the detector missed: the agent repairs it even though
+  its own measurements see nothing there, at the usual point in the order
+  (after the tones, before the grain);
+- **protect** marks real detail the detector flagged (thin poles, lettering,
+  highlights): those pixels are never repainted.
+
+The agent does not replay the edits blindly. It re-measures its own mask at
+repair time, which is after the tone step may have revealed more damage, and
+applies the corrections on top: (agent mask ∪ painted) − protected. The edits
+pass through `restore(img, answers, mask_edits={"add": …, "erase": …})`.
+
+Painted marks need their own check, because the scratch detector may not see
+them at all; that is why they were painted. For those, the verifier measures how
+much the painted pixels stand out from their neighbourhood (mean |gray − 15×15
+median|, `perception.mark_anomaly`). After the fill this must drop by at least
+30%, or the step is rejected and retried gentler. The verifier confirms that the
+fill blended in. It cannot judge whether the person was right to paint there;
+that decision is theirs, and it is recorded in the trace.
 
 **Trace.** Every step records:
 - the measurements before and after,
@@ -263,8 +291,11 @@ The UI streams it live, and the JSON is stored in S3.
 
 **Human control.**
 - Risky repairs pause for approval, with the evidence shown (the red mask).
-- A "decline" blocks that tool.
-- Answers are recorded in the trace.
+- A "decline" blocks that tool, and overrides any painted marks.
+- The person can correct the mask itself (paint missed damage, protect detail);
+  see 6.8 for measurements.
+- Answers and mask edits (share of the photo painted and protected) are recorded
+  in the trace, and every step that used them is badged "your mask" in the UI.
 
 **Latency** (median per step on the evaluation photos, ~512 px, including
 re-measurement):
@@ -353,7 +384,7 @@ automatic result.*
 | portrait, 1925 (faded, tinted) | colour cast removed, then tones restored | **good:** neutral tones, real blacks back |
 | colour slide, 1972 (magenta dye fade) | asked "ageing or real colour?" because the blacks are intact; after "ageing", cast 25.5 → 9.2 | **good:** the caution is right, and the approved result looks natural |
 | group photo with heavy emulsion loss | asked before repainting 5.7% of the photo | **correct to ask.** The losses are too large for thin-scratch inpainting either way |
-| naval officers, 1942 (one wide, curved white scratch) | nothing | **miss:** the scratch is 5–8 px wide (the detector expects ≤ 2.5 px), and one scratch is too small a share of the photo to trigger a repair |
+| naval officers, 1942 (one wide, curved white scratch) | nothing | **miss:** the scratch is 5–8 px wide (the detector expects ≤ 2.5 px), and one scratch is too small a share of the photo to trigger a repair. **Fixed with one painted stroke (6.8).** |
 | family, 1877 (scattered emulsion flecks) | nothing | **under-repaired:** few flecks pass as confident marks |
 | 1953 press photo (coarse print grain) | denoised (strength 15), tones restored | **over-smoothed:** faces and wood look waxy, even though the method-noise check passed, because the grain really was that strong |
 
@@ -367,6 +398,54 @@ We also tried detecting wide scratches with an image pyramid (½ and ¼ scale). 
 lowered the synthetic scores (0.822 → 0.818) and still missed the 1942 scratch,
 so it was not shipped.
 
+### 6.8 Human mask corrections (`eval/human_edits.py`)
+
+**1. Damage the detector misses.** Each test photo gets the "scratched" profile
+plus one 6 px scratch, wider than the detector's 2.5 px limit. A person paints
+it with a 9 px stroke. Error is measured against the clean original inside the
+scratch (mean absolute difference, 0–255).
+
+| image | detector found | damaged | automatic | painted | SSIM auto → painted |
+|---|---|---|---|---|---|
+| astronaut | 0.5% | 100.7 | 100.3 | 7.9 | 0.961 → 0.973 |
+| coffee | 2.0% | 123.5 | 122.3 | 21.8 | 0.948 → 0.956 |
+| chelsea | 1.8% | 122.5 | 121.2 | 20.7 | 0.962 → 0.974 |
+| rocket | 1.0% | 169.4 | 168.5 | 2.5 | 0.971 → 0.988 |
+| camera_bw | 1.0% | 80.8 | 80.7 | 20.4 | 0.956 → 0.965 |
+| **mean** | | **119.4** | **118.6** | **14.7** | **0.960 → 0.971** |
+
+The verifier kept all 5 painted repairs. Brush width matters: on the same
+scratches an 8 px brush leaves an error of 13, and a 24 px brush 28, because a
+wide brush repaints clean pixels too. The editor therefore starts with a thin
+brush and tells the person to paint just over the mark.
+
+**2. Real detail flagged as damage.** On the "scratched" profile the true marks
+are known (damaged − clean), so parts of the agent's repair mask more than 3 px
+from any real mark are false detections: helmet rims, the shuttle's tank edge,
+badge and lip edges. A simulated person protects them.
+
+| image | false detections | error on them: automatic | protected | SSIM auto → protected |
+|---|---|---|---|---|
+| astronaut | 0.40% | 66.2 | 0.0 | 0.978 → 0.985 |
+| coffee | 0.77% | 69.0 | 0.0 | 0.963 → 0.980 |
+| rocket | 0.26% | 45.7 | 0.0 | 0.989 → 0.992 |
+| camera_bw | 0.73% | 64.2 | 0.0 | 0.974 → 0.985 |
+
+(chelsea had no false detections.) Protected pixels are never repainted, so
+their error is exactly the damage they already had, here none. This is an upper
+bound: a real person protects only what they notice.
+
+**3. The real scan the agent missed (1942).** The detector covers 0.6% of the
+wide curved scratch, so the automatic run changes nothing. With one painted
+stroke along it, the agent repairs it and the verifier measures the stroke's
+anomaly falling 57.8 → 9.5 (structure 0.988).
+
+![human edit on a real scan](figures/human-edit-tovey.png)
+
+*Input · the stroke a person paints · automatic (missed) · with the painted stroke.
+Where the scratch crosses the picture-frame edge the fill smears slightly:
+Telea inpainting propagates the nearest surrounding colours.*
+
 ## 7. Limitations
 
 - **The scratch cutoff is tuned on synthetic marks.** Our seeded scratches are
@@ -376,6 +455,9 @@ so it was not shipped.
   damage". 6 of the 8 "revealed scratches" events happen on photos with no marks.
   Since 6.5 they no longer trigger a repair, but the badge still appears in the
   trace.
+- **Painted fills are classical inpainting.** A wide painted region is filled
+  from its border, so long or wide strokes across strong edges can smear (6.8).
+  The verifier checks that the fill blends in, not that it is historically right.
 - **Denoising softens texture** (wood grain, fur) while still passing the
   verifier.
 - **Heavy damage:** the conservative agent restores less than an aggressive
@@ -414,6 +496,7 @@ python -m eval.evaluate        # quality table (6.1)
 python -m eval.agentic         # agentic metrics, verifier ablation, LLM-failure test (6.2)
 python -m eval.trace_example   # annotated trace and ground-truth mask numbers (4)
 python -m eval.real_photos     # real public-domain scans: contact sheet (6.7)
+python -m eval.human_edits     # painted / protected mask corrections (6.8)
 python -m eval.charts          # figures in docs/figures
 python -m eval.planners        # Bedrock vs heuristic (needs AWS credentials)
 python -m bench.benchmark run --label stock   # COOL benchmark (run on Graviton)
