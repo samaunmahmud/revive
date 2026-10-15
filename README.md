@@ -113,9 +113,15 @@ Everything is one CloudFormation stack (`deploy/cloudformation.yaml`):
 - an instance role scoped to that bucket, Bedrock and ECR pull.
 
 Prerequisites:
-- AWS CLI v2 with credentials (`aws configure`);
+- AWS CLI v2 with credentials. `aws login` may fail on a brand-new account; an
+  IAM user with an access key plus `aws configure` works reliably;
 - Docker running;
-- Bedrock model access for Anthropic models in your region.
+- Bedrock access to Anthropic models in your region. New accounts must first submit
+  the one-time "Anthropic use case details" form (Bedrock console → Model catalog →
+  a Claude model); until then calls fail with `ResourceNotFoundException` and the
+  agent falls back to the heuristic planner;
+- on a brand-new account, EC2/S3/ECR can be denied by an AWS-managed service control
+  policy for a while after sign-up; `preflight.sh` reports this, so wait and re-run.
 
 ```bash
 ./deploy/preflight.sh                           # checks credentials, Docker, regions, Bedrock, COOL; changes nothing
