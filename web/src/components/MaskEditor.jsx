@@ -53,6 +53,8 @@ function tinted(src, colour) {
   return c
 }
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 export default function MaskEditor({ image, mask, maskOn = true, kicker, title, intro, onSubmit, onCancel, busy }) {
   const canvas = useRef(null)
   const photo = useRef(null)
@@ -196,7 +198,7 @@ export default function MaskEditor({ image, mask, maskOn = true, kicker, title, 
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
         <span className="mask-hint">
           {strokes.length
-            ? `${counts.add} paint · ${counts.erase} protect stroke${counts.add + counts.erase === 1 ? '' : 's'}. The agent re-runs, repairs what you painted after fixing the tones, and checks each painted mark now blends in.`
+            ? `${plural(counts.add, 'paint stroke')} · ${plural(counts.erase, 'protect stroke')}. The agent re-runs, repairs what you painted after fixing the tones, and checks each painted mark now blends in.`
             : 'Paint just over each mark; a thin brush gives the cleanest repair.'}
         </span>
       </div>
