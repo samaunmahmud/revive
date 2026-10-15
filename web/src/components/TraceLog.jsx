@@ -16,6 +16,7 @@ function StepEntry({ s }) {
       </div>
       <p className="entry-reason">
         {fallback && <span className="badge fallback">Bedrock fallback</span>}
+        {s.mask_edits && <span className="badge human">your mask</span>}
         {s.reason}
       </p>
       <div className="entry-facts">
@@ -29,6 +30,7 @@ function StepEntry({ s }) {
         )}
         <span className="fact">structure {s.structure}</span>
         {s.checks?.noise_growth !== undefined && <span className="fact" title="grain growth relative to the tone stretch; above 1.15 means the step created grain">noise growth {s.checks.noise_growth}×</span>}
+        {s.checks?.painted_anomaly !== undefined && <span className="fact" title="how much your painted marks stand out from their surroundings, before → after; must drop by 30%">your marks stand out {s.checks.painted_anomaly[0]} → <b>{s.checks.painted_anomaly[1]}</b></span>}
         {s.checks?.method_noise !== undefined && <span className="fact" title="what denoise removed vs the estimated grain; above 1.3 means it removed detail">removed {s.checks.method_noise}× grain</span>}
         <span className="fact dim">{s.ms} ms</span>
       </div>

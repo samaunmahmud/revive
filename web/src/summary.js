@@ -19,8 +19,18 @@ function kept(step, trace, index) {
       else if (revealed.length) text += ' That made more grain or marks measurable.'
       return text
     }
-    case 'inpaint_scratches':
+    case 'inpaint_scratches': {
+      const e = step.mask_edits
+      if (e) {
+        const parts = []
+        if (e.added) parts.push(`the damage you painted (${pct(e.added)} of the photo)`)
+        if (e.protected) parts.push(`left the ${pct(e.protected)} you protected untouched`)
+        const check = step.checks?.painted_anomaly
+        return `Filled scratches and dust using your corrections: ${parts.join('; ')}.` +
+          (check ? ` Your marks now blend in (stand-out ${check[0].toFixed(0)} → ${check[1].toFixed(0)}).` : '')
+      }
       return `Filled scratches and dust (${pct(b.repair_area ?? b.scratch_coverage)} of the photo)${step.reason === 'approved by human' ? ', with your approval' : ''}.`
+    }
     case 'denoise':
       return `Reduced film grain (noise ${b.noise_sigma.toFixed(1)} → ${a.noise_sigma.toFixed(1)}), checking it removed no more than the grain.`
     case 'sharpen':

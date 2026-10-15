@@ -17,7 +17,7 @@ const COPY = {
 }
 
 /** A question the agent paused on, with the OpenCV evidence and approve/decline buttons. */
-export default function QuestionCard({ question, evidence, onAnswer, busy }) {
+export default function QuestionCard({ question, evidence, onAnswer, onEditMask, busy }) {
   const copy = COPY[question.about]
   const showsMask = question.about === 'inpaint_scratches' && evidence?.mask
 
@@ -39,6 +39,9 @@ export default function QuestionCard({ question, evidence, onAnswer, busy }) {
         <p>{copy.explain(question, evidence)}</p>
         <div className="question-actions">
           <button type="button" className="btn primary" disabled={busy} onClick={() => onAnswer(question.about, true)}>{copy.yes}</button>
+          {showsMask && onEditMask && (
+            <button type="button" className="btn" disabled={busy} onClick={() => onEditMask(evidence)}>Edit the mask…</button>
+          )}
           <button type="button" className="btn" disabled={busy} onClick={() => onAnswer(question.about, false)}>{copy.no}</button>
         </div>
       </div>

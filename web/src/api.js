@@ -17,11 +17,11 @@ export function startJob({ file, sample, planner }) {
   return fetch('/api/jobs', { method: 'POST', body: form }).then(json)
 }
 
-export function answerJob(jobId, answers) {
+export function answerJob(jobId, answers, edits = null) {
   return fetch(`/api/jobs/${jobId}/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answers, mask_add: edits?.add ?? null, mask_erase: edits?.erase ?? null }),
   }).then(json)
 }
 

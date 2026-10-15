@@ -48,6 +48,21 @@ def scratch_mask(img: np.ndarray, noise: float | None = None) -> np.ndarray:
     return cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
 
 
+def mark_anomaly(img: np.ndarray, region: np.ndarray) -> float:
+    """How much the pixels in `region` stand out from their neighbourhood.
+
+    Mean |gray - 15x15 median| inside the region. A scratch or stain differs
+    from its surroundings; after a good fill it blends in, so this drops. Used to
+    verify repairs of marks a person painted, which the automatic scratch
+    detector may not see at all (that is why they were painted).
+    """
+    if region is None or not region.any():
+        return 0.0
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    resp = cv2.absdiff(gray, cv2.medianBlur(gray, 15))
+    return float(resp[region > 0].mean())
+
+
 MIN_REL_CONTRAST = 4.5  # a mark must stand out this much from the texture around it
 
 

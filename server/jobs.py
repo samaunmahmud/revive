@@ -67,7 +67,7 @@ def mask_overlay(mask: np.ndarray) -> np.ndarray:
 
 class Job:
     def __init__(self, original: np.ndarray, planner: str, answers: dict, parent: str | None = None,
-                 full: np.ndarray | None = None, full_res: bool = False):
+                 full: np.ndarray | None = None, full_res: bool = False, edits: dict | None = None):
         self.id = uuid.uuid4().hex[:12]
         self.planner = planner
         self.answers = dict(answers)
@@ -82,6 +82,9 @@ class Job:
         os.makedirs(self.dir, exist_ok=True)
         cv2.imwrite(self._path("original.png"), original)        # lossless, re-used by answer re-runs
         cv2.imwrite(self._path("original.jpg"), display(original), [cv2.IMWRITE_JPEG_QUALITY, 92])
+        for kind, m in (edits or {}).items():   # the person's mask corrections, kept for re-runs
+            if m is not None:
+                cv2.imwrite(self._path(f"edit-{kind}.png"), m)
         # keep the larger upload, if any, for a later full-size run
         self.full_size = None
         if full is not None and max(full.shape[:2]) > max(original.shape[:2]):
@@ -98,6 +101,11 @@ class Job:
 
     def original(self) -> np.ndarray:
         return cv2.imread(self._path("original.png"))
+
+    def mask_edits(self) -> dict | None:
+        edits = {k: cv2.imread(self._path(f"edit-{k}.png"), cv2.IMREAD_GRAYSCALE) for k in ("add", "erase")
+                 if os.path.exists(self._path(f"edit-{k}.png"))}
+        return edits or None
 
     def full_original(self) -> np.ndarray | None:
         return cv2.imread(self._path("upload.png")) if self.full_size else None
@@ -154,7 +162,8 @@ class Job:
             try:
                 t0 = time.perf_counter()
                 restored, trace = agent.restore(self.original(), planner=self._planner(), answers=self.answers,
-                                                log=lambda *_: None, on_event=self._on_event)
+                                                log=lambda *_: None, on_event=self._on_event,
+                                                mask_edits=self.mask_edits())
                 trace["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
                 trace["job_id"], trace["parent_job"] = self.id, self.parent
                 trace["size"], trace["full_res"] = [restored.shape[1], restored.shape[0]], self.full_res
@@ -184,8 +193,8 @@ class JobStore:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
 
-    def create(self, original, planner, answers, parent=None, full=None, full_res=False) -> Job:
-        job = Job(original, planner, answers, parent, full=full, full_res=full_res)
+    def create(self, original, planner, answers, parent=None, full=None, full_res=False, edits=None) -> Job:
+        job = Job(original, planner, answers, parent, full=full, full_res=full_res, edits=edits)
         with self._lock:
             self._jobs[job.id] = job
             for old in sorted(self._jobs.values(), key=lambda j: j.created)[:-MAX_JOBS_KEPT]:

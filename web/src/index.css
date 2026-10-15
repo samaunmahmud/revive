@@ -15,6 +15,8 @@
   --amber-ink: #2a1a08;
   --damage: #e0573c;
   --kept: #9cba7f;
+  --paint: #ffd166;        /* person: "repair this" */
+  --protect: #5ec8be;      /* person: "leave this alone" */
   --serif: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --sans: 'Inter Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -276,6 +278,7 @@ button { font: inherit; color: inherit; }
 .badge { display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; margin: 7px 6px 0 0; }
 .badge.revealed { background: rgba(226, 160, 79, 0.16); color: var(--amber); border: 1px solid rgba(226, 160, 79, 0.35); }
 .badge.fallback { background: #3a2f26; color: var(--muted); margin: 0 6px 0 0; font-family: var(--sans); }
+.badge.human { background: rgba(255, 209, 102, 0.14); color: var(--paint); border: 1px solid rgba(255, 209, 102, 0.35); margin: 0 6px 0 0; font-family: var(--sans); }
 
 .log-working { display: flex; align-items: center; gap: 8px; margin: 12px 2px 0; font-size: 13px; color: var(--muted); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--damage); box-shadow: 0 0 10px var(--damage); animation: pulse 1.2s ease-in-out infinite; }
@@ -339,6 +342,46 @@ body::before {
 .entry-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 3px; border: 2px solid var(--paper); flex-shrink: 0; }
 
 /* ---------- small screens ---------- */
+
+/* ---------- mask editor ---------- */
+
+.mask-editor {
+  margin: 18px 0; padding: 20px 22px 22px; border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 209, 102, 0.06), transparent 140px), var(--panel);
+  border: 1px solid rgba(255, 209, 102, 0.28);
+}
+.mask-editor-head h3 { font: italic 600 22px/1.25 var(--serif); margin: 4px 0 6px; color: var(--paper); }
+.mask-editor-head p { margin: 0 0 14px; color: var(--muted); font-size: 14px; max-width: 760px; }
+
+.mask-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; font-size: 13.5px; }
+.segmented { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.segmented button {
+  display: flex; align-items: center; gap: 7px; padding: 6px 14px; border: 0; border-radius: 999px;
+  background: none; color: var(--muted); cursor: pointer;
+}
+.segmented button.on { background: var(--panel-2); color: var(--paper); box-shadow: inset 0 0 0 1px var(--line); }
+.segmented button.on.paint { box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.6); }
+.segmented button.on.protect { box-shadow: inset 0 0 0 1px rgba(94, 200, 190, 0.6); }
+
+.swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.swatch.paint { background: var(--paint); }
+.swatch.protect { background: var(--protect); }
+.swatch.damage { background: var(--damage); }
+
+.brush-size { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.brush-size input { width: 120px; accent-color: var(--amber); }
+.brush-dot { display: inline-block; border-radius: 50%; border: 1.5px solid var(--paper); min-width: 4px; min-height: 4px; max-width: 36px; max-height: 36px; }
+.btn.small { padding: 5px 12px; font-size: 13px; }
+
+.mask-canvas { position: relative; touch-action: none; user-select: none; }
+.mask-canvas img { width: 100%; height: auto; }
+.mask-canvas .mask { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.mask-canvas .mask.on { opacity: 0.85; }
+.mask-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+
+.mask-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.mask-legend span { display: flex; align-items: center; gap: 6px; }
+.mask-hint { align-self: center; font-size: 12.5px; color: var(--muted); max-width: 560px; }
 
 @media (max-width: 980px) {
   .workbench { grid-template-columns: 1fr; }

@@ -12,6 +12,7 @@ GET  /api/config               planner availability
 
 If web/dist exists (npm run build), the built React app is served at /.
 """
+import base64
 import json
 import os
 import re
@@ -107,7 +108,7 @@ def _job(job_id: str):
 def get_job(job_id: str):
     job = _job(job_id)
     return {"job_id": job.id, "finished": job.finished, "planner": job.planner, "answers": job.answers,
-            "parent": job.parent, "full_size": job.full_size, "full_res": job.full_res, "trace": job.trace}
+            "parent": job.parent, "full_size": job.full_size, "mask_edits": bool(job.mask_edits()), "full_res": job.full_res, "trace": job.trace}
 
 
 @app.get("/api/jobs/{job_id}/events")
@@ -131,22 +132,56 @@ def job_events(job_id: str, request: Request):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+MAX_MASK_BYTES = 4 * 1024 * 1024
+
+
 class Answers(BaseModel):
-    answers: dict[str, bool]
+    answers: dict[str, bool] = {}
+    mask_add: str | None = None     # PNG data URL: damage the person painted
+    mask_erase: str | None = None   # PNG data URL: detail the person protected
+
+
+def decode_mask(data_url: str | None, shape) -> np.ndarray | None:
+    """Brush layer from the browser (PNG data URL, painted pixels opaque) -> uint8 mask."""
+    if not data_url:
+        return None
+    head, _, b64 = data_url.partition(",")
+    if not head.startswith("data:image/png;base64") or len(b64) > MAX_MASK_BYTES * 4 // 3:
+        raise HTTPException(400, "mask must be a PNG data URL under 4 MB")
+    try:
+        m = cv2.imdecode(np.frombuffer(base64.b64decode(b64), np.uint8), cv2.IMREAD_UNCHANGED)
+    except ValueError:
+        m = None
+    if m is None:
+        raise HTTPException(400, "could not read the mask")
+    m = m[..., 3] if m.ndim == 3 and m.shape[2] == 4 else (m.max(axis=2) if m.ndim == 3 else m)
+    h, w = shape
+    if abs(m.shape[1] / m.shape[0] - w / h) > 0.02:
+        raise HTTPException(400, "mask does not match the photo's shape")
+    return (cv2.resize(m, (w, h), interpolation=cv2.INTER_LINEAR) > 0).astype(np.uint8) * 255
 
 
 @app.post("/api/jobs/{job_id}/answer")
 def answer(job_id: str, body: Answers):
     """Re-run the agent on the same original with the person's answers merged in.
 
-    This uses the agent's own resume hook: restore(img, answers={tool: bool}).
+    This uses the agent's own resume hook: restore(img, answers={tool: bool}),
+    plus mask_edits when the person corrected the damage mask. Sending mask edits
+    approves the scratch repair; edits not re-sent carry over from the parent job.
     """
     job = _job(job_id)
     unknown = [k for k in body.answers if k not in TOOLS]
     if unknown:
         raise HTTPException(400, f"can only answer questions about tools, not {unknown}")
-    child = jobs.create(job.original(), job.planner, {**job.answers, **body.answers}, parent=job.id,
-                        full=job.full_original(), full_res=job.full_res)
+    original = job.original()
+    add, erase = decode_mask(body.mask_add, original.shape[:2]), decode_mask(body.mask_erase, original.shape[:2])
+    answers = {**job.answers, **body.answers}
+    edits = job.mask_edits()
+    if add is not None or erase is not None:
+        edits = {"add": add, "erase": erase}
+        answers["inpaint_scratches"] = True
+    child = jobs.create(original, job.planner, answers, parent=job.id,
+                        full=job.full_original(), full_res=job.full_res, edits=edits)
     return {"job_id": child.id}
 
 
@@ -162,7 +197,7 @@ def full_resolution(job_id: str):
     full = job.full_original()
     if full is None:
         raise HTTPException(400, "this photo is already at full size")
-    child = jobs.create(full, job.planner, dict(job.answers), parent=job.id, full_res=True)
+    child = jobs.create(full, job.planner, dict(job.answers), parent=job.id, full_res=True, edits=job.mask_edits())
     return {"job_id": child.id}
 
 

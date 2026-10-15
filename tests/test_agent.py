@@ -1,4 +1,5 @@
 """The agent's promises: do no harm, verify every step, ask instead of guessing, survive LLM failures."""
+import cv2
 import numpy as np
 
 from revive import agent, perception
@@ -160,3 +161,59 @@ def test_sanitize_params_handles_garbage():
     assert agent.sanitize_params("denoise", {"strength": 99}) == {"strength": 15.0}
     assert agent.sanitize_params("inpaint_scratches", {"radius": 9.7, "method": "magic"}) == {"radius": 7, "method": "telea"}
     assert agent.sanitize_params("correct_colour", None) == {"strength": 0.9}
+
+
+# ---------- human mask edits ----------
+
+def _wide_scratch(clean_img):
+    """A 6 px scratch: wider than the detector's 2.5 px limit, so it is missed."""
+    img = clean_img.copy()
+    h, w = img.shape[:2]
+    p1, p2 = (w // 3, int(h * .1)), (w // 3 + 8, int(h * .9))
+    cv2.line(img, p1, p2, (235, 235, 235), 6)
+    stripe, brush = np.zeros((h, w), np.uint8), np.zeros((h, w), np.uint8)
+    cv2.line(stripe, p1, p2, 255, 6)
+    cv2.line(brush, p1, p2, 255, 10)
+    return img, stripe, brush
+
+
+def test_painted_damage_is_repaired_even_when_undetected(clean, quiet):
+    img, stripe, brush = _wide_scratch(clean["astronaut"])
+    _, auto = agent.restore(img, log=quiet)
+    assert not any(s["tool"] == "inpaint_scratches" for s in auto["steps"])   # the detector misses it
+
+    restored, trace = agent.restore(img, log=quiet, mask_edits={"add": brush})
+    step = next(s for s in trace["steps"] if s["tool"] == "inpaint_scratches")
+    assert step["kept"] and step["reason"].startswith("repairing the damage you marked")
+    a0, a1 = step["checks"]["painted_anomaly"]
+    assert a1 < a0 * (1 - agent.PAINTED_ANOMALY_DROP)
+    err = lambda im: np.abs(im.astype(float) - clean["astronaut"].astype(float))[stripe > 0].mean()
+    assert err(restored) < 0.25 * err(img)
+    assert trace["mask_edits"]["added"] > 0
+
+
+def test_protected_pixels_are_never_repainted(aged, quiet):
+    img = aged("astronaut", "scratched")
+    _, auto = agent.restore(img, log=quiet)
+    assert any(s["tool"] == "inpaint_scratches" and s["kept"] for s in auto["steps"])
+    protect = np.zeros(img.shape[:2], np.uint8)
+    protect[:, : img.shape[1] // 2] = 255            # protect the left half
+    restored, trace = agent.restore(img, log=quiet, mask_edits={"erase": protect})
+    left = slice(None), slice(0, img.shape[1] // 2)
+    # nothing in the left half may change except by global tools (none run on this profile)
+    assert [s["tool"] for s in trace["steps"] if s["kept"]] == ["inpaint_scratches"]
+    assert np.array_equal(restored[left], img[left])
+
+
+def test_declining_the_repair_overrides_painted_marks(clean, quiet):
+    img, _, brush = _wide_scratch(clean["chelsea"])
+    restored, trace = agent.restore(img, log=quiet, answers={"inpaint_scratches": False},
+                                    mask_edits={"add": brush})
+    assert not any(s["tool"] == "inpaint_scratches" for s in trace["steps"])
+
+
+def test_edits_drawn_on_the_preview_scale_to_full_size(clean, quiet):
+    img, _, brush = _wide_scratch(clean["rocket"])
+    small = cv2.resize(brush, (brush.shape[1] // 2, brush.shape[0] // 2), interpolation=cv2.INTER_AREA)
+    _, trace = agent.restore(img, log=quiet, mask_edits={"add": small})
+    assert any(s["tool"] == "inpaint_scratches" and s["kept"] for s in trace["steps"])

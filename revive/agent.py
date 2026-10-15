@@ -45,6 +45,7 @@ REVEALABLE = ("noise_sigma", "scratch_coverage")
 # Both use only the before/after images (no clean reference), so they apply to real photos.
 NOISE_GROWTH_MAX = 1.15   # enhance_contrast: grain may grow with the tone stretch (revealed), not faster (created)
 METHOD_NOISE_MAX = 1.30   # denoise: may remove about the estimated noise; much more means real detail went too
+PAINTED_ANOMALY_DROP = 0.30  # marks a person painted must stand out at least 30% less after the fill
 
 
 # ---------- verification ----------
@@ -305,7 +306,20 @@ def _approved_params(tool, history):
     return params, note
 
 
-def restore(img, planner=None, log=print, answers=None, on_event=None, verify=True):
+def _edit_mask(m, shape):
+    """A person's brush layer -> binary uint8 mask at the photo's size, or None if empty."""
+    if m is None:
+        return None
+    m = np.asarray(m)
+    if m.ndim == 3:
+        m = m[..., -1] if m.shape[2] == 4 else m.max(axis=2)
+    if m.shape[:2] != shape:   # drawn on the preview, used on a full-size run
+        m = cv2.resize(m.astype(np.uint8), (shape[1], shape[0]), interpolation=cv2.INTER_LINEAR)
+    m = (m > 0).astype(np.uint8) * 255
+    return m if m.any() else None
+
+
+def restore(img, planner=None, log=print, answers=None, on_event=None, verify=True, mask_edits=None):
     """Run the agent on one image. Returns (restored_image, trace).
 
     answers: optional {tool: bool} — a human's replies to questions the agent
@@ -315,6 +329,14 @@ def restore(img, planner=None, log=print, answers=None, on_event=None, verify=Tr
     on_event: optional callback(kind, payload, image=None, mask=None) for live
     observers (the web UI streams these). kinds: "start", "step", "human",
     "question". It only observes; it never changes what the agent does.
+
+    mask_edits: optional {"add": mask, "erase": mask} — a person's corrections to
+    the scratch mask. "add" marks damage the detector missed: it is always
+    repaired, in the usual order (after tones, before grain). "erase" protects
+    real detail: it is never repainted. The agent still re-measures its own mask
+    when it repairs and applies the corrections on top, so edits drawn on an
+    earlier state of the photo stay valid. Sending edits counts as approving the
+    repair.
 
     verify: set False only for ablation experiments (eval/agentic.py): every
     step is kept regardless of the re-measurement, to show what the verifier
@@ -329,12 +351,27 @@ def restore(img, planner=None, log=print, answers=None, on_event=None, verify=Tr
              "initial_score": damage_score(report), "steps": [], "questions": []}
     history, blocked, retries = [], set(), {}
     approved = set()  # repairs a human signed off on
+    edits = mask_edits or {}
+    add, erase = _edit_mask(edits.get("add"), img.shape[:2]), _edit_mask(edits.get("erase"), img.shape[:2])
+    if add is not None or erase is not None:
+        trace["mask_edits"] = {"added": round(float((add > 0).mean()), 5) if add is not None else 0.0,
+                               "protected": round(float((erase > 0).mean()), 5) if erase is not None else 0.0}
     emit("start", {"initial": trace["initial"], "initial_score": trace["initial_score"],
                    "planner": planner.name}, image=current, mask=report["_mask"])
 
     for step in range(1, MAX_STEPS + 1):
         action = planner.next_action(report, history, blocked)
         tool = action["tool"]
+
+        # Damage a person painted is repaired even if the measurements missed it,
+        # at the point where scratches come in the order (before grain, before stopping).
+        wants_scratch_q = tool == "ask_human" and action.get("about") == "inpaint_scratches"
+        if (add is not None and "inpaint_scratches" not in blocked and answers.get("inpaint_scratches") is not False
+                and (tool in ("done", "denoise", "sharpen") or wants_scratch_q)):
+            params, note = _approved_params("inpaint_scratches", history)
+            action = {"tool": "inpaint_scratches", "params": params, "reason": "repairing the damage you marked" + note}
+            tool = "inpaint_scratches"
+            approved.add(tool)
 
         if tool == "done":
             trace["final_reason"] = action.get("reason", "")
@@ -364,8 +401,16 @@ def restore(img, planner=None, log=print, answers=None, on_event=None, verify=Tr
         t0 = time.perf_counter()
         params = action.get("params", {})
         mask_used = report["_mask"]
+        if tool == "inpaint_scratches" and (add is not None or erase is not None):
+            mask_used = mask_used.copy() if add is None else cv2.bitwise_or(mask_used, add)
+            if erase is not None:
+                mask_used[erase > 0] = 0
+            if not mask_used.any():   # the person protected everything the agent wanted to repaint
+                blocked.add(tool)
+                log(f"  step {step}: nothing left to repair after your mask edits")
+                continue
         fn = TOOLS[tool]["fn"]
-        candidate = fn(current, report["_mask"], **params) if tool == "inpaint_scratches" else fn(current, **params)
+        candidate = fn(current, mask_used, **params) if tool == "inpaint_scratches" else fn(current, **params)
         new_report = perception.analyse(candidate)
         ms = round((time.perf_counter() - t0) * 1000, 1)
 
@@ -380,6 +425,14 @@ def restore(img, planner=None, log=print, answers=None, on_event=None, verify=Tr
         gain = report[metric] - new_report[metric]
         target_ok = gain >= min_gain
         side_ok, side_why, checks = side_effects(tool, current, candidate, report, new_report)
+        painted_ok = None
+        if tool == "inpaint_scratches" and add is not None:
+            # the detector may not see painted marks, so judge them where they are:
+            # they must blend into their surroundings after the fill
+            a0, a1 = perception.mark_anomaly(current, add), perception.mark_anomaly(candidate, add)
+            painted_ok = a0 > 0 and (a0 - a1) / a0 >= PAINTED_ANOMALY_DROP
+            checks["painted_anomaly"] = [round(a0, 2), round(a1, 2)]
+            target_ok = target_ok or painted_ok
         kept = (target_ok and structure >= floor and side_ok) if verify else True
         revealed = {m: [report[m], new_report[m]] for m in REVEALABLE
                     if m != metric and new_report[m] > report[m] * 1.15 and new_report[m] - report[m] > 0.3 * (1 if m == "noise_sigma" else 0.003)}
@@ -389,6 +442,8 @@ def restore(img, planner=None, log=print, answers=None, on_event=None, verify=Tr
                  "target": metric, "target_gain": round(float(gain), 4),
                  "score_before": before, "score_after": after, "structure": round(structure, 3),
                  "checks": checks, "revealed": revealed, "kept": kept, "ms": ms}
+        if tool == "inpaint_scratches" and "mask_edits" in trace:
+            entry["mask_edits"] = trace["mask_edits"]
         if kept:
             current, report = candidate, new_report
             blocked.add(tool)
@@ -397,7 +452,8 @@ def restore(img, planner=None, log=print, answers=None, on_event=None, verify=Tr
             if revealed:
                 entry["verdict"] += "; revealed hidden " + ", ".join(revealed)
         else:
-            why = (f"{metric} did not improve enough" if not target_ok
+            why = ("the area you marked still stands out from its surroundings" if painted_ok is False and not target_ok
+                   else f"{metric} did not improve enough" if not target_ok
                    else f"structure {structure:.3f} below {floor}" if structure < floor
                    else side_why)
             retries[tool] = retries.get(tool, 0) + 1

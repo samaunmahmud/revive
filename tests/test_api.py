@@ -147,3 +147,37 @@ def test_display_images_are_capped_but_download_is_full_size(client, aged):
     done = next(d for k, d in ev if k == "done")
     assert max(shape(step["image"])) == 1600 and max(shape(done["restored"])) == 1600   # browser copies
     assert shape(done["restored_png"]) == (1800, 2400)                                   # the download
+
+
+def _png_data_url(mask):
+    import base64
+    ok, buf = cv2.imencode(".png", mask)
+    return "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
+
+
+def test_mask_edits_reach_the_agent_and_carry_over(client):
+    import numpy as np
+    job = client.post("/api/jobs", data={"sample": "chelsea-clean"}).json()["job_id"]
+    events(client, job)
+    h, w = cv2.imread("server/samples/chelsea-clean.png").shape[:2]
+    paint = np.zeros((h // 2, w // 2, 4), np.uint8)                   # drawn on a smaller canvas, RGBA
+    cv2.line(paint, (w // 6, h // 20), (w // 6 + 4, h // 2 - h // 20), (255, 255, 255, 255), 4)
+    child = client.post(f"/api/jobs/{job}/answer", json={"mask_add": _png_data_url(paint)}).json()["job_id"]
+    done = next(d for k, d in events(client, child) if k == "done")
+    assert done["trace"]["mask_edits"]["added"] > 0
+    assert any(s["tool"] == "inpaint_scratches" for s in done["trace"]["steps"])
+    meta = client.get(f"/api/jobs/{child}").json()
+    assert meta["mask_edits"] and meta["answers"]["inpaint_scratches"] is True
+
+    # a later answer without new edits keeps them
+    grandchild = client.post(f"/api/jobs/{child}/answer", json={"answers": {"correct_colour": True}}).json()["job_id"]
+    assert client.get(f"/api/jobs/{grandchild}").json()["mask_edits"]
+
+
+def test_bad_masks_are_rejected(client):
+    job = client.post("/api/jobs", data={"sample": "chelsea-clean"}).json()["job_id"]
+    assert client.post(f"/api/jobs/{job}/answer", json={"mask_add": "data:text/plain;base64,aGk="}).status_code == 400
+    assert client.post(f"/api/jobs/{job}/answer", json={"mask_add": "data:image/png;base64,bm90YXBuZw=="}).status_code == 400
+    import numpy as np
+    wrong_shape = _png_data_url(np.full((100, 400), 255, np.uint8))
+    assert client.post(f"/api/jobs/{job}/answer", json={"mask_add": wrong_shape}).status_code == 400

@@ -10,6 +10,7 @@ import Diagnosis from './components/Diagnosis'
 import TraceLog from './components/TraceLog'
 import QuestionCard from './components/QuestionCard'
 import AgentLoop from './components/AgentLoop'
+import MaskEditor from './components/MaskEditor'
 
 export default function App() {
   const [config, setConfig] = useState(null)
@@ -21,6 +22,7 @@ export default function App() {
   const [showMask, setShowMask] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(null)     // {image, mask, kicker, title, intro} while correcting the mask
 
   useEffect(() => {
     getConfig().then(setConfig).catch(() => {})
@@ -47,6 +49,7 @@ export default function App() {
       const { job_id } = await fn()
       setSelected(null)
       setShowMask(true)
+      setEditing(null)
       setJobId(job_id)
     } catch (e) {
       setError(e.message)
@@ -61,7 +64,31 @@ export default function App() {
     run(() => answerJob(jobId, { [about]: approved }))
   }
   const fullSize = () => run(() => fullResJob(jobId))
-  const reset = () => { setJobId(null); setAnswers({}); setSelected(null); setError('') }
+  const reset = () => { setJobId(null); setAnswers({}); setSelected(null); setError(''); setEditing(null) }
+  const repairWithEdits = (edits) => {
+    setAnswers((a) => ({ ...a, inpaint_scratches: true }))
+    run(() => answerJob(jobId, {}, edits))
+  }
+  const editFromQuestion = (evidence) => setEditing({
+    image: evidence.image,
+    mask: evidence.mask,
+    kicker: 'Your call · scratches and dust',
+    title: 'Correct what the agent wants to repaint',
+    intro: 'Red is what OpenCV measured as damage. Paint over marks it missed; protect real detail it flagged by mistake (thin poles, hair, lettering). Your corrections approve the repair.',
+  })
+  const editFromResult = () => {
+    // the agent's own mask from its last scratch repair, or what it found at the start
+    const withMask = [...events].reverse().find((e) => e.data.mask && (e.kind === 'question' || e.data.tool === 'inpaint_scratches'))
+      ?? events.find((e) => e.kind === 'start' && e.data.mask)
+    setEditing({
+      image: view.done.restored,
+      mask: withMask?.data.mask,
+      maskOn: false,   // hide it at first: you're looking for what's left, not at what was found
+      kicker: 'Touch up',
+      title: 'Mark anything it missed',
+      intro: 'This is the restored photo. Paint over scratches, spots or stains that are still there, and protect any detail that shouldn’t have been repaired. The agent re-runs from the original with your corrections and checks each one.',
+    })
+  }
 
   const trace = view.done?.trace
   const selectedEvent = selected !== null ? events[selected] : null
@@ -155,6 +182,10 @@ export default function App() {
                       </button>
                     )}
                     <a className={`btn ${view.done.full_size && !trace.full_res ? '' : 'primary'}`} href={`${view.done.restored_png}?download=true`}>Download photo</a>
+                    <button type="button" className="btn" onClick={editFromResult} disabled={busy || Boolean(editing)}
+                      title="Paint damage the agent missed, or protect detail it shouldn't touch">
+                      Touch up damage
+                    </button>
                     <a className="btn" href={`/api/jobs/${jobId}/files/trace.json?download=true`}>Download trace</a>
                     <button type="button" className="btn ghost" onClick={reset}>New photo</button>
                   </div>
@@ -165,12 +196,17 @@ export default function App() {
                   <ul>{summarise(trace).map((line) => <li key={line}>{line}</li>)}</ul>
                 </section>
 
+                {editing && (
+                  <MaskEditor {...editing} key={editing.image} busy={busy} onSubmit={repairWithEdits} onCancel={() => setEditing(null)} />
+                )}
+
                 {trace.questions.map((q) => (
                   <QuestionCard
                     key={`${jobId}-${q.about}`}
                     question={q}
                     evidence={view.questionEvents.find((e) => e.about === q.about)}
                     onAnswer={answer}
+                    onEditMask={editFromQuestion}
                     busy={busy}
                   />
                 ))}
