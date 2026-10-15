@@ -282,6 +282,8 @@ class BedrockPlanner:
         except Exception as e:  # a model hiccup must never stop a restoration
             a = self.fallback.next_action(r, history, blocked)
             a["reason"] = f"[fallback: {type(e).__name__}] " + a["reason"]
+            if str(e):   # keep the model's error in the trace so a fallback is explainable, not just counted
+                a["reason"] += f" (LLM error: {str(e)[:160]})"
             return a
 
 

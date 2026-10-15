@@ -32,7 +32,7 @@ class MeteredClient:
         try:
             resp = self.inner.converse(**kw)
         except Exception as e:
-            self.calls.append({"ms": (time.perf_counter() - t0) * 1000, "error": type(e).__name__})
+            self.calls.append({"ms": (time.perf_counter() - t0) * 1000, "error": type(e).__name__, "message": str(e)[:200]})
             raise
         u = resp.get("usage", {})
         self.calls.append({"ms": (time.perf_counter() - t0) * 1000,
@@ -112,6 +112,12 @@ def main():
         print(f"| {k} | {result['heuristic'][k]} | {result['bedrock'][k]} |")
     print(f"\nsame tool sequence in {same}/{len(cases)} cases; bedrock better in "
           f"{result['bedrock_better']}, worse in {result['bedrock_worse']}")
+    errors = {c.get("message") or c["error"] for r in llm for c in r["calls"] if "error" in c}
+    for msg in sorted(errors):
+        print(f"LLM error: {msg}")
+    if result["bedrock"]["llm_calls"] and result["bedrock"]["llm_errors"] > result["bedrock"]["llm_calls"] / 2:
+        print("WARNING: most Bedrock calls failed, so the bedrock column is mostly the heuristic fallback. "
+              "Fix access before using these numbers.")
 
 
 if __name__ == "__main__":
