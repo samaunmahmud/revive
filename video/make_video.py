@@ -26,6 +26,7 @@ CLIPS = os.path.join(ROOT, "video", "out", "clips")
 OUT = os.path.join(ROOT, "video", "out", "ReVive-draft.mp4")
 CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 W, H, FPS, FADE = 1920, 1080, 30, 0.4
+FIG_H = 700   # tallest figure that still ends above a two-line caption (captions start near y=900)
 LIVE_URL = os.environ.get("REVIVE_URL", "live demo link: add after deployment")
 FONTS = os.path.join(ROOT, "web", "node_modules", "@fontsource-variable")
 
@@ -61,18 +62,18 @@ def render_html(body, path, transparent=False, extra_css=""):
     return img if img.shape[:2] == (H, W) else cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
 
 
-def slide(tmp, name, kicker, title, body="", image=None, image_h=860):
+def slide(tmp, name, kicker, title, body="", image=None, image_h=FIG_H, centre=False):
     """Centred slide: kicker, big serif title, then either body text or a figure."""
     if image:
         # explicit height: CSS max-* never scales a small figure UP to fill the slide
         content = (f"<img src='file://{image}' style='height:{image_h}px;width:auto;max-width:1820px;object-fit:contain;"
                    "display:block;margin:22px auto 0;border-radius:12px;background:#fcfbf8;box-shadow:0 12px 40px rgba(0,0,0,.5)'>")
-        title_size, pad = 50, "28px 50px"
+        title_size, pad, align = 50, "44px 50px 0", "center" if centre else "flex-start"   # top-aligned so the caption never covers the figure
     else:
         content = f"<div style='font-size:42px;line-height:1.55;color:#d6c9b1;margin:34px auto 0;max-width:1500px'>{body}</div>"
-        title_size, pad = 104, "0 120px"
+        title_size, pad, align = 104, "0 120px", "center"
     return render_html(f"""
-      <div style="height:{H}px;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:{pad}">
+      <div style="height:{H}px;display:flex;flex-direction:column;justify-content:{align};text-align:center;padding:{pad}">
         <div style="font:700 26px Inter Variable;letter-spacing:.18em;text-transform:uppercase;color:#e2a04f">{kicker}</div>
         <div class="serif" style="font-style:italic;font-weight:600;font-size:{title_size}px;line-height:1.1;margin-top:14px;color:#efe5d2">{title}</div>
         {content}
@@ -134,18 +135,18 @@ def main():
         ("clip", "05-control", None, [(1, 11, "Nothing wrong? It changes nothing. Undamaged photos come back untouched.")]),
         ("clip", "06-real-portrait", None, [(1, 16, "A real 1925 portrait: tint removed, faded blacks restored.")]),
         ("slide", slide(tmp, "arch", "Architecture", "One container on AWS Graviton",
-                        "", fig("architecture.svg"), 860), 8,
+                        "", fig("architecture.svg")), 8,
          [(0.5, 8, "CloudFront → Graviton → OpenCV 5 agent. Bedrock plans from numbers only; S3 keeps every trace.")]),
-        ("slide", slide(tmp, "loop", "Agent workflow", "Perceive · plan · act · verify · ask", "", fig("agent-workflow.svg"), 860), 8,
+        ("slide", slide(tmp, "loop", "Agent workflow", "Perceive · plan · act · verify · ask", "", fig("agent-workflow.svg")), 8,
          [(0.5, 8, "Every action is re-measured before it's kept. Risky repairs become questions.")]),
         ("slide", slide(tmp, "quality", "Results · 35 seeded test cases", "Better than a filter chain, and harmless when nothing's wrong",
-                        "", fig("figures/ssim_by_profile.png"), 800), 7,
+                        "", fig("figures/ssim_by_profile.png")), 7,
          [(0.5, 7, "SSIM 0.68 → 0.82 (a naive pipeline: 0.67). Undamaged photos stay at 1.00.")]),
         ("slide", slide(tmp, "verifier", "Failure handling", "The verifier catches bad decisions",
-                        "", fig("figures/verifier_ablation.png"), 820), 7,
+                        "", fig("figures/verifier_ablation.png")), 7,
          [(0.5, 7, "21 injected planner mistakes: 0.80 with the verifier off, 0.83 with it on. 105 simulated LLM failures: every run finished.")]),
         ("slide", slide(tmp, "truth", "Checked against ground truth", "Re-measuring finds what fading hid",
-                        "", fig("figures/trace-astronaut-aged.png"), 560), 7,
+                        "", fig("figures/trace-astronaut-aged.png"), 560, centre=True), 7,
          [(0.5, 7, "After the tone step, OpenCV finds 78% of the real scratches instead of 54%.")]),
         ("slide", slide(tmp, "limits", "Honest limits", "What it doesn't do yet",
                         "<div style='text-align:left;display:inline-block'>"
