@@ -28,6 +28,14 @@ FULL_MAX_SIDE = 4096      # "restore at full size" cap: ~16 MP, tens of seconds 
 MAX_JOBS_KEPT = 80        # oldest job folders are deleted beyond this (full-size jobs are ~100 MB)
 RUN_SLOTS = threading.BoundedSemaphore(int(os.environ.get("REVIVE_WORKERS", "2")))
 FULL_SLOT = threading.BoundedSemaphore(1)  # full-size runs are memory-heavy: one at a time
+# Admission limits for the public URL: a burst of uploads gets a polite "busy" (HTTP 503)
+# instead of an unbounded queue of threads and files. One person clicking samples never hits them.
+MAX_PENDING = int(os.environ.get("REVIVE_MAX_PENDING", "12"))
+MAX_PENDING_PER_CLIENT = int(os.environ.get("REVIVE_MAX_PENDING_PER_CLIENT", "4"))
+
+
+class Busy(Exception):
+    """Too many unfinished jobs, overall or from one client."""
 
 
 def prepare(img: np.ndarray, max_side: int = MAX_SIDE) -> np.ndarray:
@@ -67,8 +75,10 @@ def mask_overlay(mask: np.ndarray) -> np.ndarray:
 
 class Job:
     def __init__(self, original: np.ndarray, planner: str, answers: dict, parent: str | None = None,
-                 full: np.ndarray | None = None, full_res: bool = False, edits: dict | None = None):
+                 full: np.ndarray | None = None, full_res: bool = False, edits: dict | None = None,
+                 client: str | None = None):
         self.id = uuid.uuid4().hex[:12]
+        self.client = client
         self.planner = planner
         self.answers = dict(answers)
         self.parent = parent
@@ -193,8 +203,18 @@ class JobStore:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
 
-    def create(self, original, planner, answers, parent=None, full=None, full_res=False, edits=None) -> Job:
-        job = Job(original, planner, answers, parent, full=full, full_res=full_res, edits=edits)
+    def admit(self, client: str | None):
+        """Raise Busy if another job would overload the server (checked before any work is done)."""
+        with self._lock:
+            pending = [j for j in self._jobs.values() if not j.finished]
+        if len(pending) >= MAX_PENDING:
+            raise Busy("ReVive is busy restoring other photos right now. Please try again in a minute.")
+        if client is not None and sum(j.client == client for j in pending) >= MAX_PENDING_PER_CLIENT:
+            raise Busy("You already have several restorations running. Let one finish, then try again.")
+
+    def create(self, original, planner, answers, parent=None, full=None, full_res=False, edits=None,
+               client=None) -> Job:
+        job = Job(original, planner, answers, parent, full=full, full_res=full_res, edits=edits, client=client)
         with self._lock:
             self._jobs[job.id] = job
             for old in sorted(self._jobs.values(), key=lambda j: j.created)[:-MAX_JOBS_KEPT]:

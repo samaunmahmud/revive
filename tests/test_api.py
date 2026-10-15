@@ -181,3 +181,35 @@ def test_bad_masks_are_rejected(client):
     import numpy as np
     wrong_shape = _png_data_url(np.full((100, 400), 255, np.uint8))
     assert client.post(f"/api/jobs/{job}/answer", json={"mask_add": wrong_shape}).status_code == 400
+
+
+def test_busy_server_says_so_instead_of_queueing_forever(client):
+    from server import app as app_module
+    from server import jobs as jobs_module
+
+    class Stuck:  # an unfinished job from some client
+        def __init__(self, who):
+            self.id, self.client, self.finished, self.created = f"stuck-{who}-{id(self)}", who, False, 0.0
+
+    store = app_module.jobs
+    fakes = [Stuck("203.0.113.9") for _ in range(jobs_module.MAX_PENDING_PER_CLIENT)]
+    with store._lock:
+        store._jobs.update({f.id: f for f in fakes})
+    try:
+        # the same visitor (CloudFront appends the real address last; the first entry is forged)
+        r = client.post("/api/jobs", data={"sample": "chelsea-clean"}, headers={"X-Forwarded-For": "1.2.3.4, 203.0.113.9"})
+        assert r.status_code == 503 and "several restorations" in r.json()["detail"]
+        # someone else still gets in
+        r = client.post("/api/jobs", data={"sample": "chelsea-clean"}, headers={"X-Forwarded-For": "198.51.100.7"})
+        assert r.status_code == 200
+        events(client, r.json()["job_id"])
+        # and when the whole server is full, everyone is told to wait
+        extra = [Stuck(f"198.51.100.{i}") for i in range(jobs_module.MAX_PENDING)]
+        with store._lock:
+            store._jobs.update({f.id: f for f in extra})
+        r = client.post("/api/jobs", data={"sample": "chelsea-clean"})
+        assert r.status_code == 503 and r.headers["retry-after"] == "30"
+    finally:
+        with store._lock:
+            for f in [*fakes, *locals().get("extra", [])]:
+                store._jobs.pop(f.id, None)

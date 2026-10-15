@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from revive.tools import TOOLS
 from . import storage
-from .jobs import FULL_MAX_SIDE, MAX_SIDE, JobStore, prepare
+from .jobs import FULL_MAX_SIDE, MAX_SIDE, Busy, JobStore, prepare
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAMPLES_DIR = os.path.join(ROOT, "server", "samples")
@@ -74,10 +74,11 @@ app.mount("/api/samples", StaticFiles(directory=SAMPLES_DIR), name="samples")
 
 
 @app.post("/api/jobs")
-async def create_job(file: UploadFile | None = File(None), sample: str | None = Form(None),
+async def create_job(request: Request, file: UploadFile | None = File(None), sample: str | None = Form(None),
                      planner: str = Form("heuristic")):
     if planner not in ("heuristic", "bedrock"):
         raise HTTPException(400, "planner must be 'heuristic' or 'bedrock'")
+    client = admit(request)
     if sample:
         if sample not in SAMPLES:
             raise HTTPException(404, f"unknown sample {sample}")
@@ -93,8 +94,26 @@ async def create_job(file: UploadFile | None = File(None), sample: str | None = 
             raise HTTPException(413, "image is larger than 40 megapixels")
     else:
         raise HTTPException(400, "send a file or a sample id")
-    job = jobs.create(prepare(img), planner, answers={}, full=prepare(img, FULL_MAX_SIDE))
+    job = jobs.create(prepare(img), planner, answers={}, full=prepare(img, FULL_MAX_SIDE), client=client)
     return {"job_id": job.id}
+
+
+def client_id(request: Request) -> str:
+    """Who is asking, for the per-visitor job limit. Behind CloudFront the viewer's address is the
+    LAST X-Forwarded-For entry (CloudFront appends it; earlier entries come from the client and can be forged)."""
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def admit(request: Request) -> str:
+    client = client_id(request)
+    try:
+        jobs.admit(client)
+    except Busy as e:
+        raise HTTPException(503, str(e), headers={"Retry-After": "30"})
+    return client
 
 
 def _job(job_id: str):
@@ -162,7 +181,7 @@ def decode_mask(data_url: str | None, shape) -> np.ndarray | None:
 
 
 @app.post("/api/jobs/{job_id}/answer")
-def answer(job_id: str, body: Answers):
+def answer(job_id: str, body: Answers, request: Request):
     """Re-run the agent on the same original with the person's answers merged in.
 
     This uses the agent's own resume hook: restore(img, answers={tool: bool}),
@@ -173,6 +192,7 @@ def answer(job_id: str, body: Answers):
     unknown = [k for k in body.answers if k not in TOOLS]
     if unknown:
         raise HTTPException(400, f"can only answer questions about tools, not {unknown}")
+    client = admit(request)
     original = job.original()
     add, erase = decode_mask(body.mask_add, original.shape[:2]), decode_mask(body.mask_erase, original.shape[:2])
     answers = {**job.answers, **body.answers}
@@ -181,12 +201,12 @@ def answer(job_id: str, body: Answers):
         edits = {"add": add, "erase": erase}
         answers["inpaint_scratches"] = True
     child = jobs.create(original, job.planner, answers, parent=job.id,
-                        full=job.full_original(), full_res=job.full_res, edits=edits)
+                        full=job.full_original(), full_res=job.full_res, edits=edits, client=client)
     return {"job_id": child.id}
 
 
 @app.post("/api/jobs/{job_id}/fullres")
-def full_resolution(job_id: str):
+def full_resolution(job_id: str, request: Request):
     """Run the agent again on the full-size upload, with the same answers.
 
     The preview is planned on a downscaled copy, which averages away fine grain
@@ -197,7 +217,9 @@ def full_resolution(job_id: str):
     full = job.full_original()
     if full is None:
         raise HTTPException(400, "this photo is already at full size")
-    child = jobs.create(full, job.planner, dict(job.answers), parent=job.id, full_res=True, edits=job.mask_edits())
+    client = admit(request)
+    child = jobs.create(full, job.planner, dict(job.answers), parent=job.id, full_res=True, edits=job.mask_edits(),
+                        client=client)
     return {"job_id": child.id}
 
 
