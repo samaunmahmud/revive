@@ -37,6 +37,8 @@ REAL = [
      "A real faded, tinted print. The blacks have lifted too, so the agent treats the tint as ageing: colour first, then tones."),
     ("real-nara-1972", "nara-chemical-1972.jpg", "Real 1972 colour slide",
      "A real dye-faded slide with a magenta cast, but its blacks are intact. Is that ageing or the real light? The agent asks you."),
+    ("real-tovey-1942", "tovey-1942.jpg", "Real 1942 scratched print",
+     "A wide, curved scratch the detector misses, so the agent leaves it. Click “Touch up damage”, paint over it, and watch the agent repair and check it."),
 ]
 REAL_DIR = os.path.join(os.path.dirname(OUT), "..", "eval", "real_photos")
 
