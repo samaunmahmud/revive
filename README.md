@@ -210,12 +210,14 @@ Dockerfile             ARM64 image: builds the UI, runs FastAPI + the agent
 - [x] OpenCV 5 perception and repair tools, agent loop, verifier with side-effect checks, trace
 - [x] Evaluation: quality, agentic metrics, verifier ablation, LLM failure handling, charts
 - [x] Web app: upload, live trace, approve/decline with mask evidence, before/after slider
+- [x] Human mask corrections: paint missed damage, protect real detail; verified and evaluated (report 6.8)
 - [x] ARM64 container and one-stack AWS deployment (CloudFront, Graviton, S3, Bedrock)
 - [x] Report draft, architecture and agent-workflow diagrams, annotated traces, video script
 - [ ] Deploy live and run the Bedrock-vs-heuristic evaluation
 - [ ] COOL vs stock OpenCV benchmark on Graviton4
-- [x] Real scanned old photos (6 public-domain scans, qualitative; 2 in the demo)
-- [ ] Record the video
+- [x] Real scanned old photos (6 public-domain scans, qualitative; 3 in the demo)
+- [x] Video draft (scripted recording + captions, `video/`)
+- [ ] Voice-over, team clip and final video upload
 
 ## Responsible use
 
@@ -226,3 +228,8 @@ The LLM planner receives six numbers, never the image. Restored images should be
 labelled as restored when used as historical records.
 
 Sample images are public-domain photos from scikit-image.
+
+## License
+
+Code: MIT (see `LICENSE`). Sample and evaluation photos are public domain; sources in
+`eval/real_photos/credits.json` and the scikit-image data module.
