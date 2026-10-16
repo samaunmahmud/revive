@@ -166,7 +166,7 @@ The same image runs locally:
 ## Tests
 
 ```bash
-python -m pytest        # 23 tests, ~4 s: perception, agent promises, web API
+python -m pytest        # 39 tests, ~10 s: perception, agent promises, web API
 ```
 
 They cover do-no-harm (undamaged photos come back byte-identical), verifier
